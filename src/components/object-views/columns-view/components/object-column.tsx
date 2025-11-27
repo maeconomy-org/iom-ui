@@ -12,6 +12,8 @@ import {
 } from '@/components/ui'
 import { ColumnHeader } from './column-header'
 
+import { truncateText } from '@/lib/utils'
+
 // Define interfaces for our data
 interface Property {
   uuid: string
@@ -140,9 +142,13 @@ export function ObjectColumn({
                     <div className="flex flex-col min-w-0">
                       <div className="flex items-center gap-2">
                         <span
-                          className={`text-sm font-medium truncate ${isSoftDeleted ? 'text-red-600 line-through' : ''}`}
+                          className={`text-sm font-medium ${isSoftDeleted ? 'text-red-600 line-through' : ''}`}
                         >
-                          {item.name || 'Unnamed Object'}
+                          {truncateText(
+                            item.name || 'Unnamed Object',
+                            18,
+                            true
+                          )}
                         </span>
                         {itemHasChildren && (
                           <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 shrink-0">

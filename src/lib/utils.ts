@@ -28,3 +28,17 @@ export function formatUUID(uuid: string) {
 export function toCapitalize(str: string) {
   return str.charAt(0).toUpperCase() + str.slice(1)
 }
+
+// option to truncate from middle like CBR Rot...ouwmaterialen
+export function truncateText(
+  text: string,
+  maxLength: number = 100,
+  fromMiddle: boolean = false
+): string {
+  if (!text || text.length <= maxLength) return text
+  if (fromMiddle) {
+    const halfLength = Math.floor(maxLength / 2)
+    return `${text.substring(0, halfLength)}...${text.substring(text.length - halfLength)}`
+  }
+  return `${text.substring(0, maxLength)}...`
+}
