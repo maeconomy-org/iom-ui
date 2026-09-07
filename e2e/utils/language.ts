@@ -30,8 +30,16 @@ async function openAppearance(page: Page): Promise<void> {
 /**
  * Set the interface language on the ACCOUNT, through the settings UI.
  *
- * Account state outlives the run, so every spec that calls this owes a call
- * back to `'en'` before it ends.
+ * Account state outlives the run, so every spec that calls this owes a call back to `'en'` before
+ * it ends.
+ *
+ * ⚠ UNSAFE ON A FRESH CONTEXT — use `patchPreferences(page, { locale: { app: 'en' } })` instead.
+ * The early-return below reads `aria-pressed`, which reflects the COOKIE-derived first paint. A
+ * context with no `iom_prefs` first-paints English whatever the account says, so on an account
+ * stored as Dutch this helper sees English, writes nothing, returns — and the app renders Dutch the
+ * moment `/me` resolves. That is `13-preferences/self-heal`'s parked bug arriving from the other
+ * side, and it cost two four-minute runs in `11-shares/shared-process.spec.ts` before it was found.
+ * The API path has no control to misread.
  */
 export async function setLanguage(
   page: Page,

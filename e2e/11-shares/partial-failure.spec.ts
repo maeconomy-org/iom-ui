@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 
 import type { Page } from '@playwright/test'
 
-import { expect, test } from '../fixtures/app'
+import { collectConsoleErrors, expect, test } from '../fixtures/app'
 import { secondCredentials } from '../setup/credentials'
 import { createObjectWithId } from '../utils/process'
 
@@ -45,10 +45,17 @@ test.describe('11 - shares / a partly-failed save', () => {
     page,
     consoleGuard,
   }) => {
-    // The injected 500 reaches the console as a network error, and a blanket ignore would hide a
-    // real one. Narrow on purpose: a SECOND unexpected 500 from any other route still fails the
-    // case.
-    consoleGuard.expectError(/access\/grant.*500|500 \(Internal Server Error\)/)
+    // The injected 500 reaches the console as a network error and has to be declared, or the
+    // fixture fails the case on the failure the case is injecting.
+    //
+    // This IS a blanket — and an earlier version of this comment claimed it was narrow, which was
+    // wrong twice over: Chrome's text is "Failed to load resource: the server responded with a
+    // status of 500 (Internal Server Error)" and carries NO url, so a route-scoped pattern matches
+    // nothing and the alternative that does match covers every 500 from anywhere. The narrowness is
+    // bought back positively at the end of the case instead — exactly one 500 is expected, and a
+    // second from any other route fails on the count.
+    consoleGuard.expectError(/500 \(Internal Server Error\)/)
+    const consoleErrors = collectConsoleErrors(page)
 
     const objectName = `e2e-${Date.now()}-s13`
     await createObjectWithId(page, objectName)
@@ -117,9 +124,11 @@ test.describe('11 - shares / a partly-failed save', () => {
     // The WHOLE rendered message, built from the catalogue. `publicLabel` alone was vacuous, and
     // that was measured rather than assumed: "General access" is also the section `<Label>` sitting
     // in the sheet at all times, so with the refusal removed that version still passed with no toast
-    // on screen. This string goes red there, which is what the case is for. A literal English
-    // sentence would be a false red the moment the account is left in Dutch — the family this suite
-    // keeps re-learning.
+    // on screen. This string goes red there, which is what the case is for.
+    //
+    // Reading `en.json` at runtime protects against a STALE literal after a copy edit. It does NOT
+    // make the case locale-independent — `en.json` IS the English sentence, and in Dutch the page
+    // renders something else entirely. Like S14, this case assumes an English account.
     const expected = en.access.saveFailedFor.replace(
       '{names}',
       en.access.publicLabel
@@ -132,6 +141,10 @@ test.describe('11 - shares / a partly-failed save', () => {
 
     // And the failed row snaps back to what the server still holds. Left alone it would keep
     // rendering what the user ASKED for, so a refusal would look exactly like a success.
+    //
+    // `toBeVisible` FIRST: `not.toBeChecked()` also passes on an element that is not there, so a
+    // toggle that stopped rendering would satisfy "it snapped back".
+    await expect(page.getByTestId('share-public-toggle')).toBeVisible()
     await expect(page.getByTestId('share-public-toggle')).not.toBeChecked()
 
     // Now the contract, read off STATE after a reload rather than off the request log: the revoke
@@ -139,8 +152,23 @@ test.describe('11 - shares / a partly-failed save', () => {
     await page.unroute('**/v1/access/grant')
     await page.reload()
     await expect(row).toBeVisible()
-    await openShare()
+    const reopened = await openShare()
+
+    // The sheet opened with CONTENT, not merely opened. Both assertions below are absences, and
+    // `openShare` only proves the dialog FRAME is up — a sheet still fetching its member block
+    // satisfies them both, and the case would report the contract having observed neither. Same
+    // anchor `manage-access.spec.ts` uses next door.
+    await expect(reopened.getByTestId('share-add-people')).toBeVisible()
+
     await expect(page.getByTestId(`share-member-${subjectId}`)).toHaveCount(0)
+    await expect(page.getByTestId('share-public-toggle')).toBeVisible()
     await expect(page.getByTestId('share-public-toggle')).not.toBeChecked()
+
+    // The narrowness the guard cannot give: exactly ONE 500, the one this case injected. A second
+    // from any other route lands here rather than being absorbed by `expectError`.
+    const serverErrors = consoleErrors.filter((text) =>
+      /500 \(Internal Server Error\)/.test(text)
+    )
+    expect(serverErrors, 'exactly one injected 500').toHaveLength(1)
   })
 })

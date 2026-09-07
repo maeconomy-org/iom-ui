@@ -51,8 +51,16 @@ async function deleteRow(
   name: string
 ): Promise<void> {
   await gotoList(page, path)
+  // SETTLE before counting. `gotoList` waits for the table SHELL, and `DataTable` renders loading
+  // rows while it fetches — so a bare `count()` here reads 0 for a row that is about to appear, the
+  // helper reports nothing to do, and the `catch` above swallows nothing because nothing threw.
+  // Best-effort cleanup plus a silent no-op is indistinguishable from cleanup that worked.
   const row = page.getByTestId('data-table-row').filter({ hasText: name })
-  if ((await row.count()) === 0) return
+  try {
+    await expect(row.first()).toBeVisible({ timeout: 15_000 })
+  } catch {
+    return
+  }
   const actions = rowActions(page, prefix, row.first())
   await actions.menu.click()
   await actions.action('delete').click()
@@ -64,27 +72,25 @@ async function deleteRow(
 }
 
 /**
- * TWO hooks, and the order is load-bearing. Playwright runs `afterAll` in REVERSE declaration
- * order, so this one — the session restore — runs LAST, with its own budget.
+ * TWO hooks, and the ORDER IS DECLARATION ORDER — measured, not assumed.
  *
- * They were one hook and it cost a run: the cleanup below overran the 180s hook timeout, which
- * aborts the hook outright, so the `finally` holding `restoreSession` never completed and the
- * failure surfaced on the test rather than on the teardown. A hook's budget is not shared with the
- * test's, and a `finally` does not survive its hook being killed. Split, the restore cannot be
- * starved by anything the cleanup does.
+ * An earlier version of this comment said Playwright runs `afterAll` in REVERSE declaration order
+ * and declared the restore first on that basis. It is wrong, and it inverted the outcome: the
+ * cleanup's `signInAs(second)` ran AFTER the restore, so the run ended with the second account live
+ * and `AUTH_STATE` holding a session the node had already killed — the exact cascade the split
+ * exists to prevent, and one with no failing probe, just a later spec 401ing for no visible reason.
+ *
+ * Playwright reverses for `afterEach`, and only across suite NESTING; `_runAllHooksForSuite`
+ * iterates one suite's hooks forward. Confirmed with two logging hooks in a throwaway spec.
+ *
+ * The reason for splitting stands: a hook's budget is not shared with the test's, and a `finally`
+ * does NOT survive its own hook being killed — this teardown was one hook whose cleanup overran
+ * 180s, so the `restoreSession` inside its `finally` never ran and the failure surfaced on a test
+ * that had already passed. Separate budgets are what stop the cleanup starving the restore. The
+ * order is what makes the restore the last thing that happens.
  */
-test.afterAll(async ({ browser }, testInfo) => {
-  if (!second) return
-  testInfo.setTimeout(120_000)
-  const context = await browser.newContext()
-  const page = await context.newPage()
-  // Unconditional, and to a known account. One live session per origin, so leaving the second
-  // account signed in 401s every later write spec — the cascade `restoreSession` exists for.
-  await restoreSession(page)
-  await context.close()
-})
 
-/** Best-effort, and declared second so it runs FIRST — before the restore above. */
+/** Declared FIRST so it runs first — everything here needs the second account's own session. */
 test.afterAll(async ({ browser }, testInfo) => {
   if (!second) return
   testInfo.setTimeout(240_000)
@@ -107,6 +113,18 @@ test.afterAll(async ({ browser }, testInfo) => {
   } finally {
     await context.close()
   }
+})
+
+/** Declared LAST so it runs last, after the cleanup's sign-in has ended the primary session. */
+test.afterAll(async ({ browser }, testInfo) => {
+  if (!second) return
+  testInfo.setTimeout(120_000)
+  const context = await browser.newContext()
+  const page = await context.newPage()
+  // Unconditional, and to a known account. One live session per origin, so leaving the second
+  // account signed in 401s every later write spec.
+  await restoreSession(page)
+  await context.close()
 })
 
 test.describe('11 - shares / a process shared with you', () => {
