@@ -815,6 +815,7 @@ function ShareForm({
               type="button"
               className="flex w-full items-center gap-1.5 rounded-md text-left text-sm font-medium hover:text-foreground/80"
               aria-expanded={showRevoked}
+              data-testid="revoked-toggle"
               onClick={() => setShowRevoked((v) => !v)}
             >
               <ChevronRight
@@ -829,7 +830,11 @@ function ShareForm({
                 aria-hidden="true"
               />
               <span className="flex-1">{t('access.revokedTitle')}</span>
-              <Badge variant="secondary" className="h-5">
+              <Badge
+                variant="secondary"
+                className="h-5"
+                data-testid="revoked-count"
+              >
                 {revoked.length}
               </Badge>
             </button>
@@ -847,6 +852,7 @@ function ShareForm({
                   <div
                     key={grant.id}
                     className="flex flex-wrap items-center gap-2 rounded-md border border-dashed px-3 py-2"
+                    data-testid={`revoked-row-${keyOf(grant.subject)}`}
                   >
                     <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
                       {subjectName(grant.subject)}
@@ -864,6 +870,7 @@ function ShareForm({
                       variant="ghost"
                       size="sm"
                       className="h-7 shrink-0 px-2 text-xs"
+                      data-testid={`revoked-restore-${keyOf(grant.subject)}`}
                       onClick={() => restore(grant)}
                     >
                       <RotateCcw className="mr-1 h-3 w-3" />
