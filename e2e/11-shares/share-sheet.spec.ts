@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test'
 
 import { expect, test } from '../fixtures/app'
 import { secondCredentials } from '../setup/credentials'
+import { createObjectWithId } from '../utils/process'
 
 /**
  * The per-item Share sheet — the one reached from a row menu, as opposed to the `/shares` bundle
@@ -44,9 +45,25 @@ test.describe('11 - shares / the per-item sheet', () => {
       !second,
       'set E2E_EMAIL_2 in .env.local — the picker needs someone to find'
     )
+    // ITS OWN object, not whatever happens to be newest. `openShareFor` takes
+    // `data-table-row.first()`, and the picker excludes anyone already in the draft
+    // (`candidates = users.filter((u) => !draft[u.id])`) — so the newest object having a member
+    // makes the picker return nothing and this case fails 15s later on an option that cannot
+    // appear. That is a default being asserted: no run guarantees the newest object is unshared,
+    // because the previous run created it. Measured — `11-shares/revoked-history.spec.ts` ends with
+    // a live grant on the object it creates, and this case went red the moment that file existed.
+    const objectName = `e2e-${Date.now()}-ss2`
+    await createObjectWithId(page, objectName)
+
     await page.goto('/objects')
-    await expect(page.getByTestId('data-table-row').first()).toBeVisible()
-    await openShareFor(page, 'object')()
+    const row = page
+      .getByTestId('data-table-row')
+      .filter({ hasText: objectName })
+      .first()
+    await expect(row).toBeVisible()
+    await row.getByTestId('object-actions-dropdown').click()
+    await page.getByTestId('object-action-share').click()
+    await expect(page.getByRole('dialog')).toBeVisible()
 
     api.clear()
     // The picker uses `shouldFilter={false}` and searches the SERVER, so an

@@ -3,8 +3,10 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { expect, test } from '../fixtures/app'
-import { secondCredentials } from '../setup/credentials'
+import { AUTH_STATE, secondCredentials } from '../setup/credentials'
 import { createObjectWithId } from '../utils/process'
+import { rowActions } from '../utils/selectors'
+import { gotoList } from '../utils/sheet'
 
 // Read at runtime rather than imported: the repo is ESM, so a JSON import would need an attribute.
 // Same source as S14 — the labels come from the catalogue the app renders, never from a literal, so
@@ -37,6 +39,50 @@ const PERMISSION_LABELS = Object.values(en.access.permission)
 
 const second = secondCredentials()
 
+/** The object this run made, so the teardown finds it after a failure too. */
+let createdObject: string | null = null
+
+/**
+ * DELETE THE OBJECT, and this is not tidiness — it is the state this case would otherwise hand to
+ * the next spec.
+ *
+ * S9 ends with the grant RESTORED, which is the point of the case: account 2 is a live member of
+ * this object when the test finishes. `share-sheet.spec.ts` SS2 opens the share sheet on
+ * `data-table-row.first()` — the NEWEST object — and the people picker excludes anyone already in
+ * the draft (`candidates = users.filter((u) => !draft[u.id])`). So the newest object having a
+ * member makes the picker return nothing, and SS2 fails 15s later on an option that will never
+ * appear.
+ *
+ * Measured: SS2 passes when its file runs alone and fails when this file runs before it.
+ */
+test.afterAll(async ({ browser }, testInfo) => {
+  if (!createdObject) return
+  testInfo.setTimeout(120_000)
+  // `browser`, not `page` — `page` and `context` are per-test fixtures and Playwright refuses them
+  // in `afterAll` outright, which fails the hook and reports it on the test that had already passed.
+  const context = await browser.newContext({ storageState: AUTH_STATE })
+  const page = await context.newPage()
+  await gotoList(page, '/objects')
+  const row = page
+    .getByTestId('data-table-row')
+    .filter({ hasText: createdObject })
+  try {
+    await expect(row.first()).toBeVisible({ timeout: 15_000 })
+  } catch {
+    await context.close()
+    return
+  }
+  const actions = rowActions(page, 'object', row.first())
+  await actions.menu.click()
+  await actions.action('delete').click()
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: /delete/i })
+    .click()
+  await expect(row).toHaveCount(0, { timeout: 15_000 })
+  await context.close()
+})
+
 test.describe('11 - shares / revoked history', () => {
   test.skip(
     !second,
@@ -47,6 +93,7 @@ test.describe('11 - shares / revoked history', () => {
     page,
   }) => {
     const objectName = `e2e-${Date.now()}-s9`
+    createdObject = objectName
     await createObjectWithId(page, objectName)
 
     await page.goto('/objects')
