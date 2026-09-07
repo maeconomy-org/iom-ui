@@ -786,6 +786,7 @@ function ShareForm({
           <Label>{t('access.publicLabel')}</Label>
           <label className="flex cursor-pointer items-center gap-2 text-sm">
             <Checkbox
+              data-testid="share-public-toggle"
               checked={!!publicMember}
               onCheckedChange={(checked) =>
                 checked === true
