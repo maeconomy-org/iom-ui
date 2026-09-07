@@ -1,4 +1,5 @@
 import { expect, test } from '../fixtures/app'
+import { setLanguage } from '../utils/language'
 
 /**
  * Preferences are a property of the ACCOUNT, not of this browser.
@@ -78,6 +79,16 @@ test.describe('13 - preferences / persistence', () => {
 })
 
 test.describe('13 - preferences / language', () => {
+  /**
+   * Unconditional, and to a known value. The interface language is ACCOUNT state that outlives the
+   * run, and a spec left on Dutch reddens every later case keyed on English prose — it cost eleven
+   * specs in `07-processes` once. An inline restore at the end of the happy path only runs when the
+   * test passed, and the run where it matters is the run where it failed.
+   */
+  test.afterEach(async ({ page }) => {
+    await setLanguage(page, 'en')
+  })
+
   test('switching language does not reload the document', async ({ page }) => {
     await page.goto('/settings')
     await page.getByTestId('settings-tab-appearance').click()
@@ -100,11 +111,41 @@ test.describe('13 - preferences / language', () => {
         () => (window as unknown as { __probe?: string }).__probe
       )
     ).toBe('alive')
+  })
 
-    await page.getByTestId('appearance-language-en').click()
-    await expect(page.getByTestId('appearance-language-en')).toHaveAttribute(
-      'aria-pressed',
-      'true'
-    )
+  /**
+   * SE4 — the language switch reaches the INTERFACE, and the account keeps it.
+   *
+   * The case above asserts `aria-pressed` on the control, which is the switch reporting on itself.
+   * A locale that is stored and never rendered satisfies that and nothing else, so this one reads
+   * the navbar on a different route instead — translated prose the switch does not own.
+   *
+   * The reload is the second half. `13-preferences/self-heal.spec.ts` parks the case where the
+   * cookie CONTRADICTS the account; here `PreferenceSync` has written the mirror itself, which is
+   * what an ordinary user's next visit looks like, and that path is expected to work.
+   */
+  test('SE4: the switch reaches the navbar, and a reload keeps it', async ({
+    page,
+  }) => {
+    // English FIRST, set rather than assumed — a previous run stores a language, so there is no
+    // starting value to assert. Without this the Dutch assertions below can pass on a page that was
+    // never English to begin with.
+    await setLanguage(page, 'en')
+    await page.goto('/objects')
+    await expect(page.getByRole('link', { name: 'Objects' })).toBeVisible()
+
+    await setLanguage(page, 'nl')
+
+    await page.goto('/objects')
+    await expect(page.locator('html')).toHaveAttribute('lang', 'nl')
+    // The NAVBAR, on a route that is not the one carrying the switch. It is a Client Component
+    // reading the catalogue the root layout shipped, so it is the part a client-side locale change
+    // cannot fake.
+    await expect(page.getByRole('link', { name: 'Objecten' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Objects' })).toHaveCount(0)
+
+    await page.reload()
+    await expect(page.locator('html')).toHaveAttribute('lang', 'nl')
+    await expect(page.getByRole('link', { name: 'Objecten' })).toBeVisible()
   })
 })
