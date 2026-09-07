@@ -18,6 +18,14 @@ const COLUMN = 'createdAt'
 
 const option = (page: Page) => page.getByTestId(`column-option-${COLUMN}`)
 
+/**
+ * The header addressed by COLUMN ID, never by its prose. `objects.fields.created` is "Created at" in
+ * en and "Aangemaakt op" in nl, so a `getByRole('columnheader', { name: /created at/i })` matches
+ * nothing on a Dutch account — and both of this file's absence assertions then pass having tested
+ * nothing at all, in exactly the state a run is most likely to be left in.
+ */
+const header = (page: Page) => page.getByTestId(`column-header-${COLUMN}`)
+
 async function openToggle(page: Page): Promise<void> {
   // `toPass`: the header button is clickable before hydration and a click that lands early is
   // swallowed in silence — the same trap `selectView` documents.
@@ -44,12 +52,11 @@ test.describe('02 - objects list / columns', () => {
     // The column is gone from the TABLE, not merely unchecked in the menu — the menu is the control
     // and the header is the outcome, and a toggle that only moved its own checkbox would satisfy
     // the former.
-    const header = page.getByRole('columnheader', { name: /created at/i })
-    await expect(header).toHaveCount(0)
+    await expect(header(page)).toHaveCount(0)
 
     await page.reload()
     await expect(page.getByTestId('data-table-row').first()).toBeVisible()
-    await expect(header).toHaveCount(0)
+    await expect(header(page)).toHaveCount(0)
 
     // And the menu agrees after the reload — the preference is what the control reads back, so a
     // header that stayed hidden while the checkbox reset would mean the two disagree about state.
@@ -65,8 +72,6 @@ test.describe('02 - objects list / columns', () => {
    */
   test.afterEach(async ({ page }) => {
     await setColumn(page, true)
-    await expect(
-      page.getByRole('columnheader', { name: /created at/i })
-    ).toHaveCount(1)
+    await expect(header(page)).toHaveCount(1)
   })
 })

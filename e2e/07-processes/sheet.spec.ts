@@ -86,13 +86,13 @@ test.describe('07 - processes / sheet', () => {
       page.getByTestId('file-row').filter({ hasText: `${tag}-ref` })
     ).toHaveCount(1)
 
-    // The flows the save never touched. This is the assertion the file is for: a whole-draft submit
-    // that lost a bag it did not render would pass every check above.
+    // The flows the save never touched. NOT where the inversion landed: forcing `inputs: []` into
+    // the payload produces a refusal, and `saveSheet` fails on the sheet that never closes, well
+    // before this line. These two cover the case that gets PAST the node — an accepted write that
+    // empties a bag the user never opened — which is the one nothing upstream would catch.
     await switchTab(page, 'inputs')
     await expect(page.getByTestId('flow-row-inputs-0')).toBeVisible()
     await switchTab(page, 'outputs')
     await expect(page.getByTestId('flow-row-outputs-0')).toBeVisible()
-
-    await expect(sheet(page)).toBeVisible()
   })
 })

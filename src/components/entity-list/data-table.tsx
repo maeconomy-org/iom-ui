@@ -324,6 +324,11 @@ export function DataTable<TData>({
                 {headerGroup.headers.map((header) => (
                   <TableHead
                     key={header.id}
+                    // The column id, matching `column-option-${col.id}` on the toggle. A spec that
+                    // asserts a column is gone has to address it somehow, and the only other handle
+                    // is the header's PROSE — which is translated, so the assertion is free on a
+                    // Dutch account and the case reports green having tested nothing.
+                    data-testid={`column-header-${header.column.id}`}
                     className={cn(
                       enableColumnResizing && 'relative',
                       header.column.columnDef.meta?.cellClassName

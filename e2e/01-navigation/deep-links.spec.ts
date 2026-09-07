@@ -78,8 +78,12 @@ test.describe('01 - navigation / deep links', () => {
         credentials: 'include',
       })
       const { token } = (await minted.json()) as { token?: string }
+      // `q=` is a SERVER-side free-text name search (`ShareListQuery`), not a page of everything
+      // filtered here. The account is never cleaned up and every run of this file, S11, `lifecycle`
+      // and `hierarchy` adds a bundle — so a fixed page size is a dated fuse: the day it is passed,
+      // `find` returns undefined and the case fails naming the node rather than the accumulation.
       const res = await fetch(
-        `${config!.coreBaseUrl}/api/v1/shares?page=1&size=100`,
+        `${config!.coreBaseUrl}/api/v1/shares?page=1&size=20&q=${encodeURIComponent(name)}`,
         { headers: { authorization: `Bearer ${token}` } }
       )
       const body = (await res.json()) as {

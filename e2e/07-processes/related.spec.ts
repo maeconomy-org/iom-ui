@@ -1,4 +1,4 @@
-import { expect, test } from '../fixtures/app'
+import { collectConsoleErrors, expect, test } from '../fixtures/app'
 import { AUTH_STATE } from '../setup/credentials'
 import { createObjectWithId, createProcess } from '../utils/process'
 
@@ -78,8 +78,8 @@ test.describe('07 - processes / related filter', () => {
    * nowhere else.
    *
    * Its own context, not `page.goto`: the `consoleGuard` fixture watches the fixture's page, and a
-   * hydration mismatch is the failure this case is named after. So the cold tab carries its own
-   * collector.
+   * hydration mismatch is the failure this case is named after. So the cold tab attaches the
+   * fixture's own collector to its own page.
    */
   test('N8: ?ref= in a cold tab resolves the name and hydrates cleanly', async ({
     page,
@@ -101,13 +101,10 @@ test.describe('07 - processes / related filter', () => {
     })
     try {
       const cold = await context.newPage()
-      const errors: string[] = []
-      cold.on('pageerror', (error) =>
-        errors.push(`pageerror: ${error.message}`)
-      )
-      cold.on('console', (message) => {
-        if (message.type() === 'error') errors.push(message.text())
-      })
+      // The FIXTURE's collector, not a second copy: a hand-rolled pair of listeners drops
+      // `IGNORED_CONSOLE` — and a cold context loading a route for the first time is the likeliest
+      // place in the suite to hit the chunk request that filter exists for.
+      const errors = collectConsoleErrors(cold)
 
       await cold.goto(`/processes?ref=${inputId}`)
 

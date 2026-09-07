@@ -1,5 +1,6 @@
 import { expect, test } from '../fixtures/app'
 import { setLanguage } from '../utils/language'
+import { patchPreferences } from '../utils/preferences'
 
 /**
  * Preferences are a property of the ACCOUNT, not of this browser.
@@ -86,7 +87,16 @@ test.describe('13 - preferences / language', () => {
    * test passed, and the run where it matters is the run where it failed.
    */
   test.afterEach(async ({ page }) => {
-    await setLanguage(page, 'en')
+    try {
+      await setLanguage(page, 'en')
+    } catch {
+      // The UI path can fail for the same reasons the run just did — a dead session, an unhydrated
+      // tab, a `toPass` that burns 30s and throws — and then the hook written to PREVENT the Dutch
+      // cascade causes it. `patchPreferences` is one API call with no tabs and no hydration, so it
+      // survives everything short of the node being down. Same fallback as `console-sweep-nl`.
+      await page.goto('/objects')
+      await patchPreferences(page, { locale: { app: 'en' } })
+    }
   })
 
   test('switching language does not reload the document', async ({ page }) => {

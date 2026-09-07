@@ -93,7 +93,6 @@ test.describe('07 - processes / list lifecycle', () => {
     await expect(page.getByTestId('process-action-delete')).toHaveCount(0)
 
     await page.getByTestId('process-action-restore').click()
-    await expect(processRow(page, renamed)).toContainText(renamed)
 
     // Back among the LIVE rows, which is the claim — with the deleted filter still on, a row that
     // never restored is still visible and indistinguishable from one that did.
@@ -102,7 +101,7 @@ test.describe('07 - processes / list lifecycle', () => {
   })
 
   /**
-   * PR1c — ⏸ REPRODUCES A LIVE BUG. See `docs/e2e-docs/e2e-run-2026-08-31.md` "Still open".
+   * PR1c — ⏸ CHARACTERISES A LIVE BUG. See `docs/e2e-docs/e2e-run-2026-08-31.md` "Still open" #7.
    *
    * The row's **Edit** action opens the sheet with `initialEditing`, before the fetch resolves. The
    * Details fields mount against a form instance that is then replaced, so they keep refs into the
@@ -114,34 +113,35 @@ test.describe('07 - processes / list lifecycle', () => {
    * seconds and Save stayed disabled after typing a description; via Details → Edit it read the
    * name immediately. Every other process spec uses the second path, which is why this survived.
    *
-   * `test.fail`, not `.fixme`: it writes nothing but a throwaway process, so it costs the shared
-   * account nothing, and the suite goes red the day the sheet starts working instead of waiting for
-   * someone to remember this file.
+   * It asserts the BROKEN behaviour rather than wearing `test.fail`, and the difference matters.
+   * `test.fail` is satisfied by any failure, including `createProcess` timing out on a cold node —
+   * so it would report PASSING while never reaching the bug, and rot exactly the way `.fixme`
+   * would. Written this way the case still goes red the day the sheet is fixed, and it also goes
+   * red if its own fixture breaks. Delete it with the fix.
    */
-  test.fail(
-    'PR1c: the row Edit action opens a live form, not a dead one',
-    async ({ page }) => {
-      const tag = stamp()
-      const inputName = `${tag}-in`
-      const name = `${tag}-pr1c`
+  test('PR1c: the row Edit action still opens a dead form', async ({
+    page,
+  }) => {
+    const tag = stamp()
+    const inputName = `${tag}-in`
+    const name = `${tag}-pr1c`
 
-      await createObjectWithId(page, inputName)
-      await createProcess(page, name, [inputName], inputName)
-      await selectView(page, 'table')
+    await createObjectWithId(page, inputName)
+    await createProcess(page, name, [inputName], inputName)
+    await selectView(page, 'table')
 
-      await processRow(page, name)
-        .getByTestId('process-actions-dropdown')
-        .click()
-      await page.getByTestId('process-action-edit').click()
-      await expect(sheet(page)).toBeVisible()
+    await processRow(page, name).getByTestId('process-actions-dropdown').click()
+    await page.getByTestId('process-action-edit').click()
+    await expect(sheet(page)).toBeVisible()
 
-      // The name the header is already showing. The form should hold it too.
-      await expect(page.locator('#entity-name')).toHaveValue(name)
+    // The header has the name; the form does not. Both asserted, so the case cannot pass on a sheet
+    // that failed to open — which is the whole reason it is not a `test.fail`.
+    await expect(sheet(page)).toContainText(name)
+    await expect(page.locator('#entity-name')).toHaveValue('')
 
-      // And the fields should be live. This is the half that costs a user their edit: they type,
-      // nothing dirties, and Save stays greyed out with no explanation.
-      await page.locator('#entity-description').fill(`${name}-desc`)
-      await expect(page.getByTestId('sheet-save')).toBeEnabled()
-    }
-  )
+    // And the fields are dead. This is the half that costs a user their edit: they type, nothing
+    // dirties, and Save stays greyed out with no explanation.
+    await page.locator('#entity-description').fill(`${name}-desc`)
+    await expect(page.getByTestId('sheet-save')).toBeDisabled()
+  })
 })

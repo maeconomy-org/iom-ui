@@ -1,4 +1,4 @@
-import { expect, test as base } from '@playwright/test'
+import { expect, type Page, test as base } from '@playwright/test'
 
 export interface RecordedRequest {
   method: string
@@ -50,6 +50,39 @@ const IGNORED_CONSOLE = [
   /query-devtools/,
 ]
 
+/**
+ * Attach the console and pageerror listeners to ANY page, and hand back the array they fill.
+ *
+ * Exported because a spec that opens its own context — a cold tab, a second account — gets no
+ * `consoleGuard`, and a second hand-rolled collector drifts from this one in both directions at
+ * once: stricter, because it drops `IGNORED_CONSOLE` and goes red on a chunk request the fixture
+ * exists to ignore; weaker, because it drops the `MISSING_MESSAGE` matching that is the whole
+ * reason the guard reads warnings at all.
+ */
+export function collectConsoleErrors(page: Page): string[] {
+  const errors: string[] = []
+  const keep = (text: string) =>
+    !IGNORED_CONSOLE.some((pattern) => pattern.test(text))
+
+  page.on('console', (message) => {
+    const text = message.text()
+    // MISSING_MESSAGE is a next-intl WARNING, so the type alone would miss the likeliest i18n
+    // failure: a key in en.json and not in nl.json.
+    if (
+      (message.type() === 'error' || /MISSING_MESSAGE/.test(text)) &&
+      keep(text)
+    ) {
+      errors.push(text)
+    }
+  })
+
+  page.on('pageerror', (error) => {
+    if (keep(error.message)) errors.push(`pageerror: ${error.message}`)
+  })
+
+  return errors
+}
+
 /** Lets a test declare an error it expects — a missing route SHOULD 404. */
 export interface ConsoleGuard {
   expectError(pattern: RegExp): void
@@ -61,26 +94,10 @@ export const test = base.extend<{
 }>({
   consoleGuard: [
     async ({ page }, use, testInfo) => {
-      const errors: string[] = []
+      // The same collector every spec with its own context uses, so the shared path is the one
+      // proven by the whole suite rather than by the handful of specs that open a second page.
+      const errors = collectConsoleErrors(page)
       const expected: RegExp[] = []
-      const keep = (text: string) =>
-        !IGNORED_CONSOLE.some((pattern) => pattern.test(text))
-
-      page.on('console', (message) => {
-        const text = message.text()
-        // MISSING_MESSAGE is a next-intl WARNING, so the type alone would miss the likeliest i18n
-        // failure: a key in en.json and not in nl.json.
-        if (
-          (message.type() === 'error' || /MISSING_MESSAGE/.test(text)) &&
-          keep(text)
-        ) {
-          errors.push(text)
-        }
-      })
-
-      page.on('pageerror', (error) => {
-        if (keep(error.message)) errors.push(`pageerror: ${error.message}`)
-      })
 
       await use({
         expectError: (pattern) => expected.push(pattern),
