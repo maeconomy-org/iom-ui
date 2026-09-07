@@ -405,6 +405,27 @@ by itself and fails in the run has told you where to look.
 real error every attempt, turning a 3-second answer into a 30-second silence. When diagnosing, strip
 the wrapper first.
 
+#### A spec that reads DERIVED data can be failing on a dead worker
+
+Same genre as the tell above — a symptom that points at the spec and a cause nowhere near it. Thumbnails,
+`?ancestor=`, rollups and the event log are all produced by BullMQ jobs in `io2p-core`'s **worker**
+process, not on the request path. With no consumer the API still accepts every write and the derived
+value simply never appears, so the spec reads a stale-but-valid page and fails on an assertion that is
+correct.
+
+```
+docker exec io2p-core-redis-1 redis-cli llen bull:<queue>:wait
+```
+
+Non-zero `wait` with `active=0` and `failed=0` means **nothing is consuming** — look at the worker, not
+at the spec. `pgrep -P <tsx-watch-pid>` returning no children is the same fact from the other side:
+`tsx watch` keeps its parent alive after a child dies at startup, so `pgrep -fl worker` finds a process
+that is doing nothing. It dies this way whenever the worker is started before Redis is up.
+
+This cost 2026-09-03 to 09-07. L18 (`cover-thumb` never renders) and DD2 ("1 descendant" for a
+three-deep chain) were both called product bugs and were neither; both passed unchanged after a
+`pnpm worker` restart, with no spec edit. **Both specs were right both times.**
+
 ### What Does NOT Need Tests
 
 - Pure UI styling changes (color, spacing, font)

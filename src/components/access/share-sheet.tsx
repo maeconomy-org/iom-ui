@@ -730,6 +730,7 @@ function ShareForm({
             <Command shouldFilter={false}>
               <CommandInput
                 placeholder={t('access.searchPeople')}
+                data-testid="people-search"
                 value={peopleQuery}
                 onValueChange={setPeopleQuery}
               />
@@ -857,7 +858,11 @@ function ShareForm({
                     <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
                       {subjectName(grant.subject)}
                     </span>
-                    <Badge variant="secondary" className="h-5 shrink-0">
+                    <Badge
+                      variant="secondary"
+                      className="h-5 shrink-0"
+                      data-testid="permission-badge"
+                    >
                       {t(`access.permission.${grant.permission}`)}
                     </Badge>
                     <span className="shrink-0 text-xs text-muted-foreground">
