@@ -61,9 +61,9 @@ pnpm vitest run src/__tests__/lib/search-parser.test.ts
 
 ### Key Patterns
 
-**SDK Client** (`src/lib/sdk-client.ts`): Singleton `sdkClient` configured with four service endpoints (auth, registry, node, up). Handles token storage in localStorage, automatic retry (3x), 30s timeout. All API communication goes through this client.
+**SDK Client** (`src/lib/io2p.ts`): `useIomClient()` returns an `io2p-client` bound to ONE storage-node origin (`coreBaseUrl`), cached in `clientsByOrigin` — one client per origin, never a module singleton, which the file calls the old SDK's trap. It is auth-agnostic: it takes a single `getToken` dependency (`getCoreToken`) rather than owning token storage, and the SDK itself owns retry, pagination and errors. 30s default timeout, overridable per node via `nodeTimeout`. A silent 401 retry is logged as a warning, because a stream of them means token-refresh churn rather than one stale JWT.
 
-**React Query Hooks** (`src/hooks/api/use-*.ts`): Each domain entity has a dedicated hook (useObjects, useGroups, useProperties, etc.). Cache config: infinite stale time, 10-min GC, no auto-refetch on mount/focus. Mutations must invalidate relevant query keys on success.
+**React Query Hooks** (`src/hooks/api/`): Each domain entity has a dedicated hook — `useObjects`, `useProcesses`, `useTemplates`, built on `create-entity-hooks.ts`; access, files, imports and users have their own modules. Defaults in `query-context.tsx`: **30s** stale time (not infinite — that cached any query without its own `staleTime` for the whole session), 10-min GC, `refetchOnMount: true` (which means "refetch IF STALE", and `false` broke cross-page invalidation), `refetchOnWindowFocus: false`. Mutations must invalidate relevant query keys on success.
 
 **Auth Flow** (`src/contexts/auth-context.tsx`): mTLS certificate or email/password login → JWT stored in localStorage → automatic refresh 5 min before expiry via SDK. Protected routes redirect to `/` (auth page). Public pages defined in `PUBLIC_PAGES_SET`.
 
