@@ -317,6 +317,89 @@ describe('rollup rows in the property read view', () => {
     expect(screen.queryByTestId('rollup-line')).not.toBeInTheDocument()
   })
 
+  // The same leaf, but a rule that MULTIPLIES. The property row reads 12 kg and the total reads
+  // 60 kg, so they are not the same quantity printed twice — suppressing the card would hide the
+  // one figure the rule was created to produce.
+  it('keeps a multiplied leaf’s card, where an unmultiplied one is dropped', () => {
+    const chair = {
+      id: 'p1',
+      key: 'mass',
+      label: 'Mass',
+      values: [{ id: 'v1', data: '12 kg', num: 12, unit: 'kg' }],
+    }
+    const quantity = {
+      id: 'p2',
+      key: 'quantity',
+      label: 'Quantity',
+      values: [{ id: 'v2', data: '5', num: 5 }],
+    }
+    renderRollups(
+      [chair, quantity],
+      new Map([
+        [
+          'mass',
+          entry({
+            multipliedBy: 'quantity',
+            buckets: [
+              bucket({
+                dimension: 'mass',
+                unit: 'kg',
+                num: 60,
+                unitCount: 5,
+                contributorCount: 1,
+              }),
+            ],
+          }),
+        ],
+      ])
+    )
+
+    expect(screen.getByTestId('rollup-card')).toBeInTheDocument()
+    expect(screen.getByText('60 kg')).toBeInTheDocument()
+    expect(screen.queryByTestId('rollup-only-self')).not.toBeInTheDocument()
+  })
+
+  // The other half of the bug: a parent that carries its OWN quantity contributes 100x3, so
+  // calling its share 100 put the other 200 "below" — a number nothing in the tree accounts for.
+  it('scales the object’s own share before splitting', () => {
+    const mass = {
+      id: 'p1',
+      key: 'mass',
+      label: 'Mass',
+      values: [{ id: 'v1', data: '100 kg', num: 100, unit: 'kg' }],
+    }
+    const quantity = {
+      id: 'p2',
+      key: 'quantity',
+      label: 'Quantity',
+      values: [{ id: 'v2', data: '3', num: 3 }],
+    }
+    renderRollups(
+      [mass, quantity],
+      new Map([
+        [
+          'mass',
+          entry({
+            multipliedBy: 'quantity',
+            buckets: [
+              bucket({
+                dimension: 'mass',
+                unit: 'kg',
+                num: 360,
+                unitCount: 8,
+                contributorCount: 2,
+              }),
+            ],
+          }),
+        ],
+      ])
+    )
+
+    expect(
+      screen.getByText('objects.properties.rollupBelowShare:{"below":"60 kg"}')
+    ).toBeInTheDocument()
+  })
+
   it('falls back to a contributor count when the units do not match', () => {
     // A property authored in m3 cannot be subtracted from a mass total, so no
     // split is claimed rather than a wrong one computed.

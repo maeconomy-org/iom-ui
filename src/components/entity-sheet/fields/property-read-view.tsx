@@ -146,12 +146,28 @@ export function PropertyReadView({
     const byKey = new Map(properties.map((p) => [p.key.toLowerCase(), p]))
     return (
       [...liveRollups.values()]
-        .map((entry) => ({ entry, property: byKey.get(entry.propertyKey) }))
+        .map((entry) => {
+          // `undefined` when the rule names no multiplier; an EMPTY array when it names one this
+          // object has no value for. `ownFactor` reads those two as different things — the first
+          // is "no scaling", the second is "absent, so one".
+          const multiplied = entry.multipliedBy
+            ? byKey.get(entry.multipliedBy.toLowerCase())
+            : undefined
+          return {
+            entry,
+            property: byKey.get(entry.propertyKey),
+            multiplierValues: entry.multipliedBy
+              ? multiplied
+                ? liveValues(multiplied)
+                : []
+              : undefined,
+          }
+        })
         // A rollup whose only contributor is this object restates the property
         // sitting directly above it — in canonical units, so it reads as a second
         // number. A leaf has nothing below to total; the card returns when a child
         // does.
-        .filter(({ entry, property }) => {
+        .filter(({ entry, property, multiplierValues }) => {
           if (!property || entry.error) return true
           const own = liveValues(property)
           // `num`/`parse` are normalizer output and land with the READ, so a value
@@ -179,7 +195,7 @@ export function PropertyReadView({
             const unreadable = own.filter((v) => v.parse?.ok === false).length
             return entry.skippedCount > unreadable
           }
-          return !ownShare(lead, own)?.onlyContributor
+          return !ownShare(lead, own, multiplierValues)?.onlyContributor
         })
         .sort((a, b) => a.entry.propertyKey.localeCompare(b.entry.propertyKey))
     )
@@ -251,13 +267,14 @@ export function PropertyReadView({
               </div>
             )
           )}
-          {rollupCards.map(({ entry, property }) => (
+          {rollupCards.map(({ entry, property, multiplierValues }) => (
             <RollupCard
               key={entry.ruleId}
               entry={entry}
               locale={locale}
               ownUnit={property ? ownUnit(property) : undefined}
               ownValues={property ? liveValues(property) : undefined}
+              multiplierValues={multiplierValues}
             />
           ))}
         </div>
@@ -276,13 +293,14 @@ export function PropertyReadView({
               allowFiles={allowFiles}
             />
           ))}
-          {rollupCards.map(({ entry, property }) => (
+          {rollupCards.map(({ entry, property, multiplierValues }) => (
             <RollupCard
               key={entry.ruleId}
               entry={entry}
               locale={locale}
               ownUnit={property ? ownUnit(property) : undefined}
               ownValues={property ? liveValues(property) : undefined}
+              multiplierValues={multiplierValues}
             />
           ))}
         </div>
@@ -306,12 +324,14 @@ function RollupCard({
   entry,
   locale,
   ownValues,
+  multiplierValues,
   ownUnit: unit,
   'data-testid': testId = 'rollup-card',
 }: {
   entry: EntityRollupEntry
   locale: PropertyDictionaryLocale
   ownValues?: readonly { num?: number; unit?: string }[]
+  multiplierValues?: readonly { num?: number; unit?: string }[]
   ownUnit?: string
   'data-testid'?: string
 }) {
@@ -341,6 +361,7 @@ function RollupCard({
         entry={entry}
         ownUnit={unit}
         ownValues={ownValues}
+        multiplierValues={multiplierValues}
         className="mt-0.5"
       />
     </div>

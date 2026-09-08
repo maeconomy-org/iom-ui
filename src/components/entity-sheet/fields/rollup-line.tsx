@@ -35,6 +35,26 @@ export function rollupSaysSomething(entry: EntityRollupEntry): boolean {
   )
 }
 
+type NumericValues = readonly { num?: number; unit?: string }[]
+
+/**
+ * The factor the node applied to THIS object's contribution, mirroring how it resolves a
+ * multiplier per row. `undefined` values mean the rule does not multiply at all.
+ *
+ * `null` means the node SKIPPED this object: a multiplier that is present but unreadable is
+ * refused, never defaulted to one, because summing a contributor unscaled is the silent wrongness
+ * the multiplier exists to prevent. Only an ABSENT multiplier falls back to one — "no quantity"
+ * and "quantity 1" say the same thing.
+ */
+export function ownFactor(values: NumericValues | undefined): number | null {
+  if (values === undefined) return 1 // the rule names no multiplier
+  if (values.length === 0) return 1 // absent -> one
+  if (values.length > 1) return null // several live values -> ambiguous
+  const [only] = values
+  if (only?.num === undefined) return null // present but never parsed
+  return only.num < 0 ? null : only.num
+}
+
 /**
  * How the object's OWN value sits inside the lead bucket's total.
  *
@@ -48,17 +68,31 @@ export function rollupSaysSomething(entry: EntityRollupEntry): boolean {
  * and currently has to do in their head, in the wrong units. Returned only when
  * every contributing unit matches the bucket's; a mixed-unit property cannot be
  * subtracted safely and gets no split.
+ *
+ * When the rule multiplies, the own values are SCALED first. Subtracting an unscaled own value
+ * from a scaled total reported a difference that was not there: an object holding 100 kg at a
+ * quantity of 3 contributes 300, and calling it 100 put the other 200 "below" an object that may
+ * have nothing below it.
  */
 export function ownShare(
   bucket: RollupBucket,
-  ownValues: readonly { num?: number; unit?: string }[]
+  ownValues: NumericValues,
+  /** The object's live values under the key the rule multiplies by; omit when it names none. */
+  multiplierValues?: NumericValues
 ): { own: number; below: number; onlyContributor: boolean } | null {
   const contributing = ownValues.filter(
     (v) => v.num !== undefined && v.unit === bucket.unit
   )
   if (contributing.length === 0) return null
 
-  const own = contributing.reduce((sum, v) => sum + (v.num ?? 0), 0)
+  const factor = ownFactor(multiplierValues)
+  if (factor === null) {
+    // The node dropped this object's values, so none of the total is its own and it is not in
+    // `contributorCount` either — everything shown belongs to the subtree below.
+    return { own: 0, below: bucket.num, onlyContributor: false }
+  }
+
+  const own = contributing.reduce((sum, v) => sum + (v.num ?? 0), 0) * factor
   const below = bucket.num - own
 
   return {
@@ -66,7 +100,12 @@ export function ownShare(
     below,
     // Not `below === 0`: a descendant holding exactly zero is still a
     // contributor, and the count is what the node actually reports.
-    onlyContributor: bucket.contributorCount === contributing.length,
+    //
+    // A scaled contribution is never "the same number twice": the property row reads 12 kg and
+    // the total reads 60 kg, so suppressing the total would hide the figure the rule was created
+    // to produce. `factor === 1` is exact and needs no float comparison.
+    onlyContributor:
+      factor === 1 && bucket.contributorCount === contributing.length,
   }
 }
 
@@ -84,6 +123,7 @@ export function RollupLine({
   entry,
   ownUnit,
   ownValues,
+  multiplierValues,
   compact = false,
   className,
 }: {
@@ -100,7 +140,13 @@ export function RollupLine({
    * canonical `num`/`unit` are what make the comparison honest — omit them and
    * the line falls back to the bare total.
    */
-  ownValues?: readonly { num?: number; unit?: string }[]
+  ownValues?: NumericValues
+  /**
+   * The object's own live values under `entry.multipliedBy`. Absent when the rule names no
+   * multiplier — which is NOT the same as an empty array, since that means the key is named and
+   * this object simply has no value for it.
+   */
+  multiplierValues?: NumericValues
   /**
    * Grid mode: one line, no expander. The compact card has nowhere to put a disclosure, so extra
    * dimensions are COUNTED there and read in the detailed view.
@@ -114,7 +160,7 @@ export function RollupLine({
   const foreign = rest.some((b) => b.unit !== ownUnit)
   const [open, setOpen] = useState(!compact && foreign)
 
-  const share = lead ? ownShare(lead, ownValues ?? []) : null
+  const share = lead ? ownShare(lead, ownValues ?? [], multiplierValues) : null
 
   return (
     <div
