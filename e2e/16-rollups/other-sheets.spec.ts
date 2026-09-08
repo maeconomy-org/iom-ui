@@ -35,6 +35,14 @@ test.describe('16 - rollups / other sheets', () => {
     await expect(page.getByTestId('data-table')).toBeVisible()
 
     const row = page.getByTestId('data-table-row').first()
+    // This file authors nothing — the claim is about the SHEET, and a process created here would
+    // add a write path that can fail for reasons of its own. The cost is a hidden dependency on
+    // `07-processes` having run first, which is invisible until the folder is run on its own
+    // against an empty node. Skip with the reason rather than report a product bug.
+    test.skip(
+      (await row.count()) === 0,
+      'no process on the node — run 07-processes first, or seed one'
+    )
     await expect(row).toBeVisible()
     await rowActions(page, 'process', row).details.click()
     await expect(page.getByRole('dialog')).toBeVisible()

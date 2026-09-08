@@ -77,7 +77,12 @@ test.describe('16 - rollups / cross-user', () => {
     await grantee.goto('/objects')
     await expect(grantee.getByTestId('data-table')).toBeVisible()
     await grantee.getByTestId('filter-menu').click()
-    await grantee.getByTestId('filter-option-shared').click()
+    const sharedScope = grantee.getByTestId('filter-option-shared')
+    await expect(sharedScope).toBeVisible()
+    // `force`, because the option is present but never settles: the popover animates in while the
+    // list behind it refetches, so Playwright's stability check retries until the test's whole
+    // budget is gone and reports a missing element rather than a moving one.
+    await sharedScope.click({ force: true })
     await grantee.keyboard.press('Escape')
 
     const row = grantee

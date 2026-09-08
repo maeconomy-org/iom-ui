@@ -81,9 +81,14 @@ async function removeUserRule(page: Page, key: string): Promise<void> {
   // "nothing to do" and leaks it. That leak is self-perpetuating: it makes `SYSTEM_KEY` a key the
   // account owns, which disables Add, which fails RR5, which leaks again. A plain loop rather than
   // `toPass`, because what is being waited on is a fetch, not a flaky assertion.
+  // Waits for a row that is actually DELETABLE, not merely for one carrying the key. The node
+  // seeds a system rule under this same key, and a system rule has no actions menu at all — so a
+  // poll on the key alone is satisfied by the seeded row the instant the tier filter has not
+  // landed yet, and the click below then waits out the whole hook for a menu that never exists.
+  const actions = rowActions(page, 'rollup-rule', row.first())
   let present = false
   for (let attempt = 0; attempt < 12; attempt++) {
-    if ((await row.count()) > 0) {
+    if ((await actions.menu.count()) > 0) {
       present = true
       break
     }
@@ -91,7 +96,6 @@ async function removeUserRule(page: Page, key: string): Promise<void> {
   }
   if (!present) return
 
-  const actions = rowActions(page, 'rollup-rule', row.first())
   await actions.menu.click()
   await actions.action('delete').click()
   await page

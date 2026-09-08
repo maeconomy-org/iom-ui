@@ -135,17 +135,25 @@ test.describe('16 - rollups / imported objects', () => {
   })
 
   /**
-   * Was DEFERRED, and the reason it was deferred is the defect that has since been fixed.
+   * ⏸ STILL DEFERRED, but for a different reason than before — the original one is fixed.
    *
-   * Measured on the node at the time: the parent's `/rollups` response carried every SEED rule with
-   * a real `computedAt` and no entry for this run's user rule at all. That is exactly the arming
-   * gap — a rule created after the last write to a subtree computed NEVER, so a hand-typed rule
-   * over freshly imported data could not appear however long the test waited. Creating a rule now
-   * arms every holder of its key, so the case is live again.
+   * It was deferred because the parent's `/rollups` carried every seed rule and no entry for this
+   * run's user rule: the arming gap, where a rule created after the last write computed never.
+   * That is fixed, and measured here rather than assumed — during a run of this file the node held
+   * the live rule, 4 holders of its key, and SIX computed state rows covering both buildings. The
+   * totals exist.
+   *
+   * What still fails is this fixture's reach. The poll looks for the building by name in the ROOT
+   * list, and the account accumulates objects across the suite, so the row is not reliably on the
+   * page it examines — the loop then inspects nothing and reports the total as missing. Driving
+   * the search dialog instead did not survive headless either.
+   *
+   * To finish it: give the objects list a `?q=` the spec can navigate to, or seed this file its own
+   * account. Do NOT re-enable it by lengthening the poll — the wait was never the problem.
    *
    * Renamed from RU22, which `cross-user.spec.ts` already uses.
    */
-  test('RU27: the rule totals the imported value onto the parent', async ({
+  test.fixme('RU27: the rule totals the imported value onto the parent', async ({
     page,
   }, testInfo) => {
     // ~70s to settle by contract (a 30s cooldown, then a reaper scanning every 30s), so this
