@@ -183,7 +183,12 @@ export function PropertyReadView({
           // there?" outright. Compared against `undefined` rather than tested for falsiness: the
           // field is ABSENT when the subtree exceeded the size bound, and `!descendantCount` would
           // read that as "leaf" — wrong in the opposite direction, on the largest trees.
-          if (entry.descendantCount === 0) return false
+          //
+          // Unless the rule MULTIPLIES. Then a leaf's total is not a restatement of its own value:
+          // the property row reads 12 kg and the total reads 60 kg, so the card carries the one
+          // figure the rule was created to produce. "Nothing below" stops meaning "nothing to say"
+          // the moment a contributor is scaled.
+          if (entry.descendantCount === 0 && !entry.multipliedBy) return false
 
           const lead = [...entry.buckets].sort((a, b) => b.num - a.num)[0]
           // With no bucket the entry can only report skips, and `ownShare` has

@@ -340,6 +340,10 @@ describe('rollup rows in the property read view', () => {
           'mass',
           entry({
             multipliedBy: 'quantity',
+            // `descendantCount: 0` is what the node actually sends for a leaf, and omitting it is
+            // why this passed while the real page hid the card: the count check short-circuits
+            // BEFORE the own/below split is consulted. An e2e run found it.
+            descendantCount: 0,
             buckets: [
               bucket({
                 dimension: 'mass',

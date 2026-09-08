@@ -20,12 +20,11 @@ import { cn } from '@/lib/utils'
  * "7 values could not be read" is the signal that a unit is wrong somewhere
  * below.
  *
- * A NEVER-COMPUTED entry (`computedAt: null`) is deliberately NOT kept. The
- * worker recomputes on a write to the subtree, so a rule added after an object
- * was last touched stays synthesized indefinitely — and polling re-reads the
- * same synthesized entry. "Updating…" forever promises a number that is not
- * coming, which is worse than showing nothing; the total appears on its own the
- * first time the subtree is written.
+ * A NEVER-COMPUTED entry (`computedAt: null`) is still not kept, but no longer because the number
+ * is not coming — a rule change now arms every holder of its key, so one is on its way. It is not
+ * kept because there is nothing to show YET, and an "Updating…" block that resolves to an empty
+ * result would appear only to vanish. The poll refetches while any entry is stale, so the card
+ * arrives on its own.
  */
 export function rollupSaysSomething(entry: EntityRollupEntry): boolean {
   return (
