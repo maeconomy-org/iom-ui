@@ -45,3 +45,44 @@ Element.prototype.hasPointerCapture ??= () => false
 Element.prototype.setPointerCapture ??= () => {}
 Element.prototype.releasePointerCapture ??= () => {}
 Element.prototype.scrollIntoView ??= () => {}
+
+// jsdom 29 no longer ships its own Web Storage — it defers to Node's, which stays undefined unless
+// the process is started with `--localstorage-file`. So `localStorage` is absent under test even
+// though `window` and `document` are real, and every suite touching it died in `beforeEach` on
+// "Cannot read properties of undefined (reading 'clear')".
+//
+// A stub rather than the flag: Node's implementation persists to a FILE, so runs would leak state
+// into each other and the order of tests would start to matter.
+class MemoryStorage implements Storage {
+  #items = new Map<string, string>()
+
+  get length() {
+    return this.#items.size
+  }
+  key(index: number) {
+    return [...this.#items.keys()][index] ?? null
+  }
+  getItem(key: string) {
+    return this.#items.get(key) ?? null
+  }
+  // The spec coerces both, and code under test passes numbers and objects freely.
+  setItem(key: string, value: string) {
+    this.#items.set(String(key), String(value))
+  }
+  removeItem(key: string) {
+    this.#items.delete(String(key))
+  }
+  clear() {
+    this.#items.clear()
+  }
+}
+
+for (const name of ['localStorage', 'sessionStorage'] as const) {
+  if (!window[name]) {
+    Object.defineProperty(window, name, {
+      configurable: true,
+      writable: true,
+      value: new MemoryStorage(),
+    })
+  }
+}
