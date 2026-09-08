@@ -189,11 +189,12 @@ describe('entities hooks', () => {
     expect(rollupPollInterval({ data: [] })).toBe(false)
   })
 
-  it('rollupPollInterval ignores an entry the worker has never computed', () => {
-    // `computedAt: null` is `stale: true` by construction, and only a WRITE to
-    // the subtree queues the worker — so polling it re-reads the same
-    // synthesized entry every 30s for as long as the sheet stays open.
-    const never = {
+  it('rollupPollInterval polls an entry the worker has not computed YET', () => {
+    // The node arms every holder when a rule changes, so `computedAt: null` means the
+    // first result is on its way. Skipping it refused to poll for the one entry that
+    // was about to land, and a rule created over existing data showed nothing until
+    // the sheet was reopened.
+    const notYet = {
       ruleId: 'r1',
       propertyKey: 'mass',
       buckets: [],
@@ -202,6 +203,10 @@ describe('entities hooks', () => {
       computedAt: null,
     }
 
-    expect(rollupPollInterval({ data: [never] })).toBe(false)
+    expect(rollupPollInterval({ data: [notYet] })).toBe(ROLLUP_POLL_MS)
+    // Settled and never re-armed: nothing to wait for.
+    expect(rollupPollInterval({ data: [{ ...notYet, stale: false }] })).toBe(
+      false
+    )
   })
 })

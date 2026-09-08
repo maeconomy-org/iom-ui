@@ -106,18 +106,16 @@ export const ROLLUP_POLL_MS = 30_000
  * Keep polling while any rule's recompute is still queued. One stale entry is enough — the others
  * being settled says nothing about that one.
  *
- * A NEVER-COMPUTED entry (`computedAt: null`) does not count. It is `stale: true` by construction,
- * and the worker only recomputes on a write to the subtree — so a rule added after the object was
- * last touched would otherwise poll every 30s forever, re-reading a synthesized entry that cannot
- * change until something else does.
+ * `stale` alone is the condition. A never-computed entry (`computedAt: null`) used to be excluded,
+ * because a rule armed nothing and the worker only recomputed on a write to the subtree — so such
+ * an entry could not change and polling it burned the budget forever. The node now arms every
+ * holder when a rule changes, so `computedAt: null` means ARRIVING, and excluding it refused to
+ * poll for exactly the entry about to land.
  */
 export function rollupPollInterval(
   data: { data: EntityRollupEntry[] } | undefined
 ): number | false {
-  const queued = data?.data.some(
-    (entry) => entry.stale && entry.computedAt !== null
-  )
-  return queued ? ROLLUP_POLL_MS : false
+  return data?.data.some((entry) => entry.stale) ? ROLLUP_POLL_MS : false
 }
 
 /**

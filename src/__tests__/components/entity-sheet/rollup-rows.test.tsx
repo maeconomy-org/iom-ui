@@ -9,7 +9,7 @@ import {
 } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
-import type { EntityRollupEntry } from 'io2p-client'
+import type { EntityRollupEntry, RollupBucket } from 'io2p-client'
 
 import { PropertyFields } from '@/components/entity-sheet/fields'
 import type { EntityDraft } from '@/lib/entity'
@@ -42,12 +42,25 @@ vi.mock('@/contexts/query-context', () => ({
 
 const NO_DERIVED = new Map<string, never>()
 
+// `unitCount` defaults to `contributorCount` — what the node sends when no rule multiplies.
+// A multiplied bucket passes it explicitly, which is the only case where the two differ.
+function bucket(
+  b: Omit<RollupBucket, 'unitCount'> & Partial<Pick<RollupBucket, 'unitCount'>>
+): RollupBucket {
+  return { unitCount: b.contributorCount, ...b }
+}
+
 function entry(over: Partial<EntityRollupEntry> = {}): EntityRollupEntry {
   return {
     ruleId: 'rule-mass',
     propertyKey: 'mass',
     buckets: [
-      { dimension: 'mass', unit: 'kg', num: 4120, contributorCount: 312 },
+      bucket({
+        dimension: 'mass',
+        unit: 'kg',
+        num: 4120,
+        contributorCount: 312,
+      }),
     ],
     skippedCount: 0,
     stale: false,
@@ -175,12 +188,12 @@ describe('rollup rows in the property read view', () => {
             ruleId: 'rule-volume',
             propertyKey: 'volume',
             buckets: [
-              {
+              bucket({
                 dimension: 'volume',
                 unit: 'm3',
                 num: 1650,
                 contributorCount: 44,
-              },
+              }),
             ],
           }),
         ],
@@ -201,8 +214,18 @@ describe('rollup rows in the property read view', () => {
   it('never adds buckets together, and counts the ones it hides', () => {
     const mixed = entry({
       buckets: [
-        { dimension: 'mass', unit: 'kg', num: 4120, contributorCount: 312 },
-        { dimension: 'volume', unit: 'm3', num: 1650, contributorCount: 44 },
+        bucket({
+          dimension: 'mass',
+          unit: 'kg',
+          num: 4120,
+          contributorCount: 312,
+        }),
+        bucket({
+          dimension: 'volume',
+          unit: 'm3',
+          num: 1650,
+          contributorCount: 44,
+        }),
       ],
     })
     renderRollups([massProperty()], new Map([['mass', mixed]]))
@@ -220,8 +243,18 @@ describe('rollup rows in the property read view', () => {
   it('opens a foreign-unit bucket without being asked', () => {
     const mixed = entry({
       buckets: [
-        { dimension: 'mass', unit: 'kg', num: 4120, contributorCount: 312 },
-        { dimension: 'volume', unit: 'm3', num: 1650, contributorCount: 44 },
+        bucket({
+          dimension: 'mass',
+          unit: 'kg',
+          num: 4120,
+          contributorCount: 312,
+        }),
+        bucket({
+          dimension: 'volume',
+          unit: 'm3',
+          num: 1650,
+          contributorCount: 44,
+        }),
       ],
     })
     renderRollups([massProperty()], new Map([['mass', mixed]]))
@@ -231,8 +264,13 @@ describe('rollup rows in the property read view', () => {
   it('keeps a same-unit bucket behind the expander', () => {
     const twoMass = entry({
       buckets: [
-        { dimension: 'mass', unit: 'kg', num: 4120, contributorCount: 312 },
-        { dimension: 'mass', unit: 'kg', num: 90, contributorCount: 3 },
+        bucket({
+          dimension: 'mass',
+          unit: 'kg',
+          num: 4120,
+          contributorCount: 312,
+        }),
+        bucket({ dimension: 'mass', unit: 'kg', num: 90, contributorCount: 3 }),
       ],
     })
     renderRollups([massProperty()], new Map([['mass', twoMass]]))
@@ -262,12 +300,12 @@ describe('rollup rows in the property read view', () => {
           'mass',
           entry({
             buckets: [
-              {
+              bucket({
                 dimension: 'mass',
                 unit: 'kg',
                 num: 2400,
                 contributorCount: 1,
-              },
+              }),
             ],
           }),
         ],
@@ -428,7 +466,12 @@ describe('rollup rows in the property read view', () => {
           'mass',
           entry({
             buckets: [
-              { dimension: 'mass', unit: 'kg', num: 2400, contributorCount: 1 },
+              bucket({
+                dimension: 'mass',
+                unit: 'kg',
+                num: 2400,
+                contributorCount: 1,
+              }),
             ],
           }),
         ],
@@ -491,7 +534,12 @@ describe('rollup rows in the property read view', () => {
     // opposite of the bug the field exists to fix.
     const overBound = entry({
       buckets: [
-        { dimension: 'mass', unit: 'kg', num: 9000, contributorCount: 40 },
+        bucket({
+          dimension: 'mass',
+          unit: 'kg',
+          num: 9000,
+          contributorCount: 40,
+        }),
       ],
     })
     delete (overBound as { descendantCount?: number }).descendantCount
@@ -523,7 +571,9 @@ describe('rollup rows in the property read view', () => {
 
   it('formats a unitless bucket without a trailing space', () => {
     const unitless = entry({
-      buckets: [{ dimension: 'unitless', num: 820, contributorCount: 12 }],
+      buckets: [
+        bucket({ dimension: 'unitless', num: 820, contributorCount: 12 }),
+      ],
     })
     renderRollups([massProperty()], new Map([['mass', unitless]]))
     expect(screen.getByText('820')).toBeInTheDocument()
@@ -541,12 +591,12 @@ describe('rollup rows in the property read view', () => {
             ruleId: 'rule-volume',
             propertyKey: 'volume',
             buckets: [
-              {
+              bucket({
                 dimension: 'volume',
                 unit: 'm3',
                 num: 1650,
                 contributorCount: 44,
-              },
+              }),
             ],
           }),
         ],
