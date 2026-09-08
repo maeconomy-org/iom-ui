@@ -154,11 +154,16 @@ test.describe('16 - rollups / the quantity multiplier', () => {
     await expect(page.getByTestId('data-table')).toBeVisible()
     await openObjectSheet(page, rowFor(page, LEAF))
 
-    // 12 kg at a quantity of 5. Asserting the SCALED figure and the absence of the unscaled one is
-    // what separates "the multiplier ran" from "the value was copied up".
+    // 12 kg at a quantity of 5, so the total is 60 and the breakdown says where it came from.
+    //
+    // Not "the card does not mention 12 kg": the per-unit figure legitimately prints it, and an
+    // assertion on its ABSENCE would fail the moment the line says what each thing weighs — which
+    // is the point of the breakdown. The pair of numbers is what separates "the multiplier ran"
+    // from "the value was copied up".
     const card = page.getByTestId('rollup-card')
     await expect(card).toContainText('60')
-    await expect(card).not.toContainText('12 kg')
+    await expect(page.getByTestId('rollup-unit-count')).toContainText('5')
+    await expect(page.getByTestId('rollup-unit-count')).toContainText('12 kg')
   })
 
   test('RU26: a quantity the node cannot read is marked on the value', async ({

@@ -610,6 +610,7 @@
       "excludedFromRollups": "excluded from the totals that count by it",
       "excludedFromBoth": "excluded from the formulas and the totals that use it",
       "rollupTotal": "Subtree total",
+      "rollupUnitBreakdown": "{count} × {each}",
       "rollupContributors": "{count, plural, one {# value} other {# values}}",
       "rollupSkipped": "{count, plural, one {# not counted} other {# not counted}}",
       "rollupMoreDimensions": "{count, plural, one {+# more unit} other {+# more units}}",

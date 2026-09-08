@@ -404,6 +404,56 @@ describe('rollup rows in the property read view', () => {
     ).toBeInTheDocument()
   })
 
+  // `unitCount` is the only signal a multiplier ran, and it is what makes a MIS-KEYED one visible:
+  // "4120 × 1 kg" reads wrong at a glance where a bare "4120 kg" does not.
+  it('states how many things a scaled total counts, and what each one weighs', () => {
+    renderRollups(
+      [
+        {
+          id: 'p1',
+          key: 'mass',
+          label: 'Mass',
+          values: [{ id: 'v1', data: '12 kg', num: 12, unit: 'kg' }],
+        },
+        {
+          id: 'p2',
+          key: 'quantity',
+          label: 'Quantity',
+          values: [{ id: 'v2', data: '5', num: 5 }],
+        },
+      ],
+      new Map([
+        [
+          'mass',
+          entry({
+            multipliedBy: 'quantity',
+            descendantCount: 0,
+            buckets: [
+              bucket({
+                dimension: 'mass',
+                unit: 'kg',
+                num: 60,
+                unitCount: 5,
+                contributorCount: 1,
+              }),
+            ],
+          }),
+        ],
+      ])
+    )
+
+    expect(screen.getByTestId('rollup-unit-count')).toHaveTextContent(
+      'objects.properties.rollupUnitBreakdown:{"count":5,"each":"12 kg"}'
+    )
+  })
+
+  it('says nothing about units when no rule multiplies', () => {
+    // `unitCount === contributorCount` is what an unmultiplied total always reports, so printing
+    // it would put "312 × 13.2 kg" on every ordinary rollup in the sheet.
+    renderRollups([massProperty()], new Map([['mass', entry()]]))
+    expect(screen.queryByTestId('rollup-unit-count')).not.toBeInTheDocument()
+  })
+
   it('falls back to a contributor count when the units do not match', () => {
     // A property authored in m3 cannot be subtracted from a mass total, so no
     // split is claimed rather than a wrong one computed.

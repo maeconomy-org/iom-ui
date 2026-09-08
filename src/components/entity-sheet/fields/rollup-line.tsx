@@ -34,6 +34,12 @@ export function rollupSaysSomething(entry: EntityRollupEntry): boolean {
   )
 }
 
+/**
+ * Trim IEEE-754 noise from the per-unit division, matching the node's own rounding policy so
+ * `60 / 5` reads as `12` rather than `11.999999999999998`.
+ */
+const round = (n: number) => Number(n.toPrecision(12))
+
 type NumericValues = readonly { num?: number; unit?: string }[]
 
 /**
@@ -275,9 +281,30 @@ function BucketAmount({
       ? Math.min(100, Math.max(0, (share.own / bucket.num) * 100))
       : null
 
+  // How many THINGS the values represent, when a rule scales them. Equal to `contributorCount`
+  // otherwise, and the two differing is the only signal that a multiplier ran at all.
+  //
+  // Worth showing for a reason beyond arithmetic: a mis-keyed multiplier produces a plausible
+  // total and a nonsense count. "4120 x 1 kg" reads wrong at a glance where "4120 kg" does not.
+  const scaled =
+    bucket.unitCount !== undefined &&
+    bucket.unitCount !== bucket.contributorCount &&
+    bucket.unitCount > 0
+  const perUnit = scaled
+    ? `${format.number(round(bucket.num / bucket.unitCount))}${unit}`
+    : null
+
   return (
     <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
       <span className="font-medium text-foreground">{amount}</span>
+      {perUnit && (
+        <span data-testid="rollup-unit-count">
+          {t('objects.properties.rollupUnitBreakdown', {
+            count: bucket.unitCount as number,
+            each: perUnit,
+          })}
+        </span>
+      )}
       {ownPct !== null && share ? (
         <>
           {/* Two segments, not a percentage: the question is "how much of this
