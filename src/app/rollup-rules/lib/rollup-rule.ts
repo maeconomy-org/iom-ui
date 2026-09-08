@@ -1,4 +1,4 @@
-import type { RollupRuleDTO } from 'io2p-client'
+import type { CreateRollupRuleBody, RollupRuleDTO } from 'io2p-client'
 
 import { getDictionaryEntry, resolveKey } from '@/constants/property-dictionary'
 
@@ -88,4 +88,38 @@ export function isCertainlyNonNumericKey(key: string): boolean {
   const entry = getDictionaryEntry(key)
   if (!entry?.category) return false
   return NON_NUMERIC_CATEGORIES.has(entry.category)
+}
+
+/**
+ * The create body for one queued key, under the form's shared aggregation and multiplier.
+ *
+ * `multiplyBy` is OMITTED rather than sent empty — the field is optional on the node, and an empty
+ * object would be a rule that multiplies by nothing.
+ */
+export function rollupRuleCreateBody(
+  propertyKey: string,
+  aggregation: RollupAggregation,
+  multiplierKey?: string
+): CreateRollupRuleBody {
+  const multiplyBy = normalizeRollupPropertyKey(multiplierKey ?? '')
+  return {
+    propertyKey,
+    aggregation,
+    ...(multiplyBy ? { multiplyBy: { propertyKey: multiplyBy } } : {}),
+  }
+}
+
+/**
+ * Whether the shared multiplier names a key that is itself queued.
+ *
+ * The node 422s a rule that multiplies by its own key. One multiplier over N queued keys means
+ * that rejects exactly ONE create while the rest succeed — and the partial-failure toast cannot
+ * say which chip was at fault, so the form blocks the submit and names the collision instead.
+ */
+export function multiplierCollides(
+  multiplierKey: string,
+  queuedKeys: readonly string[]
+): boolean {
+  const normalized = normalizeRollupPropertyKey(multiplierKey)
+  return normalized !== '' && queuedKeys.includes(normalized)
 }

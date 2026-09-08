@@ -38,7 +38,9 @@ import type { RollupRuleDTO } from 'io2p-client'
 import { rollupRuleErrorMessage } from '../lib/errors'
 import {
   isCertainlyNonNumericKey,
+  multiplierCollides,
   normalizeRollupPropertyKey,
+  rollupRuleCreateBody,
   ROLLUP_AGGREGATIONS,
   type RollupAggregation,
 } from '../lib/rollup-rule'
@@ -122,6 +124,7 @@ function RollupRuleForm({ onDone }: { onDone: () => void }) {
     ROLLUP_AGGREGATIONS[0]
   )
   const [failures, setFailures] = useState<KeyFailure[]>([])
+  const [multiplyBy, setMultiplyBy] = useState('')
 
   const takenKeys = useMemo(
     () => new Set((ownRules?.data ?? []).map((r) => r.propertyKey)),
@@ -137,7 +140,28 @@ function RollupRuleForm({ onDone }: { onDone: () => void }) {
   const draftQueued = keys.includes(normalizedDraft)
   const canAdd = normalizedDraft !== '' && !draftExists && !draftQueued
 
-  const canSave = keys.length > 0 && !createMutation.isPending
+  /**
+   * One multiplier for every queued key — "sum weight, volume and cost, each scaled by quantity"
+   * is the intent, and per-key would need a chip editor for a field most rules never set.
+   *
+   * Normalized like the rolled-up key, and for the same reason: a rule matches the node's index on
+   * an exact key, so a Dutch-typed "Aantal" has to resolve to what the property field wrote.
+   */
+  const normalizedMultiplier = normalizeRollupPropertyKey(multiplyBy)
+  const showMultiplierNormalized =
+    normalizedMultiplier !== '' && normalizedMultiplier !== multiplyBy
+  // The node 422s a rule that multiplies by its own key. With ONE multiplier over N queued keys
+  // that rejects exactly one create, and the toast cannot say which chip — so block the submit
+  // instead and name the collision.
+  const collides = multiplierCollides(multiplyBy, keys)
+  // Inverted emphasis from the rolled-up key's warning: a text-valued rollup key produces an empty
+  // total, but a text-valued MULTIPLIER drops each contributor out of a total that still looks
+  // plausible.
+  const multiplierNonNumeric =
+    normalizedMultiplier !== '' &&
+    isCertainlyNonNumericKey(normalizedMultiplier)
+
+  const canSave = keys.length > 0 && !collides && !createMutation.isPending
 
   const addKey = () => {
     if (!canAdd) return
@@ -169,7 +193,7 @@ function RollupRuleForm({ onDone }: { onDone: () => void }) {
     for (const key of keys) {
       try {
         await createMutation.mutateAsync({
-          body: { propertyKey: key, aggregation },
+          body: rollupRuleCreateBody(key, aggregation, multiplyBy),
         })
         created.push(key)
       } catch (error) {
@@ -205,6 +229,7 @@ function RollupRuleForm({ onDone }: { onDone: () => void }) {
   }
 
   const hintId = `${fieldId}-hint`
+  const multiplierHintId = `${fieldId}-multiply-by-hint`
 
   return (
     <form
@@ -326,6 +351,49 @@ function RollupRuleForm({ onDone }: { onDone: () => void }) {
             )}
           </div>
         )}
+
+        <div className="space-y-2">
+          <Label htmlFor={`${fieldId}-multiply-by`}>
+            {t('rollupRules.multiplyBy')}
+          </Label>
+          <PropertyNameCombobox
+            id={`${fieldId}-multiply-by`}
+            value={multiplyBy}
+            onChange={(key) => setMultiplyBy(key)}
+            placeholder={t('rollupRules.placeholders.multiplyBy')}
+            aria-invalid={collides}
+            aria-describedby={multiplierHintId}
+            data-testid="rollup-rule-multiply-by"
+          />
+          <div id={multiplierHintId} className="space-y-1">
+            {showMultiplierNormalized && (
+              <p className="text-xs text-muted-foreground">
+                {t('rollupRules.normalizedAs', { key: normalizedMultiplier })}
+              </p>
+            )}
+            {collides ? (
+              <p
+                className="text-xs text-destructive"
+                data-testid="rollup-rule-multiply-by-collision"
+              >
+                {t('rollupRules.multiplyBySelf')}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                {t('rollupRules.multiplyByHint')}
+              </p>
+            )}
+            {multiplierNonNumeric && !collides && (
+              <p
+                className="flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-500"
+                data-testid="rollup-rule-multiply-by-non-numeric"
+              >
+                <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>{t('rollupRules.multiplyByNonNumeric')}</span>
+              </p>
+            )}
+          </div>
+        </div>
 
         <div className="space-y-2">
           <Label htmlFor={`${fieldId}-aggregation`}>

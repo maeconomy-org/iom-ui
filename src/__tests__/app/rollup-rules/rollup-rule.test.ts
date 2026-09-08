@@ -4,7 +4,9 @@ import en from '@/messages/en.json'
 import nl from '@/messages/nl.json'
 import { rollupRuleErrorMessage } from '@/app/rollup-rules/lib/errors'
 import {
+  multiplierCollides,
   normalizeRollupPropertyKey,
+  rollupRuleCreateBody,
   ROLLUP_AGGREGATIONS,
 } from '@/app/rollup-rules/lib/rollup-rule'
 
@@ -125,5 +127,50 @@ describe('rollup rule message catalogue', () => {
     expect(at(nl, `rollupRules.aggregations.${aggregation}`)).toBeTypeOf(
       'string'
     )
+  })
+})
+
+describe('rollupRuleCreateBody', () => {
+  it('omits multiplyBy entirely when none is named', () => {
+    expect(rollupRuleCreateBody('mass', 'sum')).toEqual({
+      propertyKey: 'mass',
+      aggregation: 'sum',
+    })
+    // Not `multiplyBy: undefined`: the field is optional, and an empty object would be a rule
+    // that multiplies by nothing.
+    expect('multiplyBy' in rollupRuleCreateBody('mass', 'sum', '  ')).toBe(
+      false
+    )
+  })
+
+  // The multiplier matches the node's index on an exact key, exactly like the rolled-up key —
+  // a Dutch-typed "Aantal" has to resolve to what the property field stored.
+  it('normalizes the multiplier the same way as the rule key', () => {
+    const body = rollupRuleCreateBody('mass', 'sum', 'Aantal')
+    expect(body.multiplyBy).toEqual({
+      propertyKey: normalizeRollupPropertyKey('Aantal'),
+    })
+  })
+})
+
+describe('multiplierCollides', () => {
+  // The node 422s a rule multiplying by its own key. One multiplier over N queued keys rejects
+  // exactly one create, and the partial-failure toast cannot say which chip — so the form blocks.
+  it('catches a multiplier that is itself queued', () => {
+    expect(multiplierCollides('quantity', ['mass', 'quantity'])).toBe(true)
+  })
+
+  it('catches it through normalization, not only by exact text', () => {
+    const queued = normalizeRollupPropertyKey('Aantal')
+    expect(multiplierCollides('Aantal', ['mass', queued])).toBe(true)
+  })
+
+  it('allows a multiplier no queued key names', () => {
+    expect(multiplierCollides('quantity', ['mass', 'volume'])).toBe(false)
+  })
+
+  it('is not a collision when no multiplier is named', () => {
+    expect(multiplierCollides('', ['mass'])).toBe(false)
+    expect(multiplierCollides('   ', [''])).toBe(false)
   })
 })

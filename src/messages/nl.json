@@ -1604,6 +1604,9 @@
     "created": "{count, plural, one {Rollup-regel gemaakt} other {# rollup-regels gemaakt}}",
     "createdPartial": "{created} gemaakt, {failed} mislukt.",
     "multiplyBy": "Geteld met",
+    "multiplyByHint": "Optioneel. Schaalt elke waarde met een andere eigenschap op hetzelfde object, zodat 10 stoelen van 12 kg samen 120 kg zijn.",
+    "multiplyBySelf": "Een regel kan zichzelf niet tellen. Haal deze sleutel uit de lijst of tel met een andere.",
+    "multiplyByNonNumeric": "Deze eigenschap bevat meestal tekst. Een waarde die niet leesbaar is, valt volledig buiten het totaal.",
     "recompute": "Nu herberekenen",
     "recomputeQueued": "Herberekening in de wachtrij. Totalen verschijnen zodra ze klaar zijn.",
     "deleted": "Rollup-regel verwijderd",
@@ -1614,7 +1617,8 @@
     "replaceToChange": "Verwijder deze regel en maak een nieuwe om een sleutel te wijzigen.",
     "systemReadOnly": "Ingebouwde regels horen bij de node en kunnen niet worden gewijzigd of verwijderd.",
     "placeholders": {
-      "propertyKey": "bijv. gewicht"
+      "propertyKey": "bijv. gewicht",
+      "multiplyBy": "bijv. aantal"
     },
     "empty": {
       "title": "Nog geen rollup-regels",
