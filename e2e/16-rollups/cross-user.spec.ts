@@ -82,14 +82,23 @@ test.describe('16 - rollups / cross-user', () => {
     // `force`, because the option is present but never settles: the popover animates in while the
     // list behind it refetches, so Playwright's stability check retries until the test's whole
     // budget is gone and reports a missing element rather than a moving one.
+    //
+    // Clicked ONCE and then verified, never retried: the option is a toggle, so a retry loop that
+    // clicks again turns the scope back off and the test waits out its whole budget on a list
+    // scoped to "mine".
     await sharedScope.click({ force: true })
+    await expect(sharedScope).toHaveAttribute('data-selected-state', 'on', {
+      timeout: 10_000,
+    })
     await grantee.keyboard.press('Escape')
 
     const row = grantee
       .getByTestId('data-table-row')
       .filter({ hasText: objectName })
       .first()
-    await expect(row).toBeVisible({ timeout: 20_000 })
+    // 20s was enough alone and not in sequence: the grant has to reach the grantee's index while
+    // the node is still draining the rollup lane the rest of this folder filled.
+    await expect(row).toBeVisible({ timeout: 60_000 })
     await row.getByTestId('object-details-button').click()
     await expect(grantee.getByRole('dialog')).toBeVisible()
     await grantee.waitForTimeout(4_000)
