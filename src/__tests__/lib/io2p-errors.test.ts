@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   ConflictError,
   ForbiddenError,
-  IomError,
+  ApiError,
   NetworkError,
   NotFoundError,
   PreconditionFailedError,
@@ -34,7 +34,7 @@ describe('iomStatus', () => {
     expect(iomStatus(new ConflictError(problem(409)))).toBe(409)
     expect(iomStatus(new PreconditionFailedError(problem(412)))).toBe(412)
     expect(iomStatus(new ValidationError(problem(422)))).toBe(422)
-    expect(iomStatus(new IomError(problem(500)))).toBe(500)
+    expect(iomStatus(new ApiError(problem(500)))).toBe(500)
   })
 
   it('reads a plain object identically (guards a duplicated module copy)', () => {
@@ -102,7 +102,7 @@ describe('saveErrorMessage', () => {
   })
 
   it('falls back to saveFailed for an unmapped status or a network error', () => {
-    expect(saveErrorMessage(new IomError(problem(500))).key).toBe(
+    expect(saveErrorMessage(new ApiError(problem(500))).key).toBe(
       'common.saveFailed'
     )
     expect(saveErrorMessage(new Error('Failed to fetch')).key).toBe(
@@ -224,7 +224,7 @@ describe('isMintInterrupted', () => {
 
   it('does not match an HTTP failure that happens to mention the mint', () => {
     expect(
-      isMintInterrupted(new IomError(problem(500, 'token mint interrupted')))
+      isMintInterrupted(new ApiError(problem(500, 'token mint interrupted')))
     ).toBe(false)
   })
 
@@ -252,7 +252,7 @@ describe('isCallerCancelled', () => {
       url: 'https://node.test/api/v1/objects',
     })
     expect(isCallerCancelled(nodeDown)).toBe(false)
-    expect(isCallerCancelled(new IomError(problem(500)))).toBe(false)
+    expect(isCallerCancelled(new ApiError(problem(500)))).toBe(false)
   })
 })
 

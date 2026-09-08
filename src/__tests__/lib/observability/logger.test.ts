@@ -49,7 +49,7 @@ describe('serializeError', () => {
     expect(out.stack).toContain('boom')
   })
 
-  it('serializes IomError-shaped errors with status/title/detail/problem', () => {
+  it('serializes ApiError-shaped errors with status/title/detail/problem', () => {
     const err = Object.assign(new Error('Missing permission: WRITE'), {
       status: 403,
       title: 'Forbidden',

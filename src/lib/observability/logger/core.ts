@@ -36,7 +36,7 @@ export interface SerializedError {
   name: string
   message: string
   stack?: string
-  // IomError / problem+json enrichment
+  // ApiError / problem+json enrichment
   status?: number
   title?: string
   detail?: string
@@ -85,7 +85,7 @@ function serializeErrorInner(err: unknown, depth: number): SerializedError {
     if (typeof err.stack === 'string') {
       out.stack = redactPresignedUrlString(err.stack)
     }
-    // IomError enrichment by shape, not instanceof — a duplicated module copy
+    // ApiError enrichment by shape, not instanceof — a duplicated module copy
     // (ESM + CJS in one graph) makes instanceof silently false.
     const anyErr = err as unknown as Record<string, unknown>
     if (typeof anyErr.status === 'number') out.status = anyErr.status

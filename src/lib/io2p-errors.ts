@@ -1,4 +1,4 @@
-import { IomError } from 'io2p-client'
+import { ApiError } from 'io2p-client'
 
 // Message keys a failed entity write can map to. A literal union (rather than `string`) so a typo
 // or a removed translation key is a typecheck failure, not a runtime "objects.saveError.foo" render.
@@ -18,7 +18,7 @@ export interface SaveErrorMessage {
 // `instanceof` narrows the common case, but a duplicated module copy (ESM + CJS in one graph) would
 // make it silently false, so fall back to reading the shape. io2p errors carry a numeric `status`.
 export function iomStatus(error: unknown): number | undefined {
-  if (error instanceof IomError) return error.status
+  if (error instanceof ApiError) return error.status
   if (typeof error === 'object' && error !== null && 'status' in error) {
     const { status } = error as { status: unknown }
     if (typeof status === 'number') return status
@@ -137,7 +137,7 @@ export function wasErrorReported(error: unknown): boolean {
 // The problem+json `detail` — server prose naming the rule that rejected the write. Only worth
 // surfacing for 422, where it tells the user which field to fix.
 export function iomDetail(error: unknown): string | undefined {
-  if (error instanceof IomError) return error.detail
+  if (error instanceof ApiError) return error.detail
   if (typeof error === 'object' && error !== null && 'detail' in error) {
     const { detail } = error as { detail: unknown }
     if (typeof detail === 'string' && detail.trim() !== '') return detail
