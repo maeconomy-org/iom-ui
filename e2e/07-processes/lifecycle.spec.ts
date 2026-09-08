@@ -50,8 +50,7 @@ test.describe('07 - processes / list lifecycle', () => {
     await selectView(page, 'table')
     await expect(processRow(page, original)).toHaveCount(1)
 
-    // Details then Edit, NOT the row's Edit action — that action opens a sheet whose Details fields
-    // are dead, which is PR1c below.
+    // Details then Edit. The row's own Edit action is PR1c's business.
     await openProcess(page, original)
     await enterEditMode(page)
     const panel = sheet(page)
@@ -101,25 +100,19 @@ test.describe('07 - processes / list lifecycle', () => {
   })
 
   /**
-   * PR1c — ⏸ CHARACTERISES A LIVE BUG. See `docs/e2e-docs/e2e-run-2026-08-31.md` "Still open" #7.
+   * PR1c — the row's Edit action opens a LIVE form.
    *
-   * The row's **Edit** action opens the sheet with `initialEditing`, before the fetch resolves. The
-   * Details fields mount against a form instance that is then replaced, so they keep refs into the
-   * dead one: Name renders blank while the header, the flows and the read view all show the real
-   * name, and typing into Name or Description dirties nothing — Save never enables. Switching tabs
-   * and back remounts the fields against the live form and everything works.
+   * It used to open a dead one: the action sets `initialEditing`, so the Details inputs mount in the
+   * same commit the fetch resolves, and the form's `reset` effect then dropped every registered ref.
+   * Name rendered blank while the header showed the real name, and typing dirtied nothing — Save
+   * never enabled, so the user's edit had nowhere to go. Switching tabs and back remounted the
+   * fields and everything worked, which is what made it look cosmetic.
    *
-   * Measured, both paths, same process, same run: via the Edit action the field read `""` after 10
-   * seconds and Save stayed disabled after typing a description; via Details → Edit it read the
-   * name immediately. Every other process spec uses the second path, which is why this survived.
-   *
-   * It asserts the BROKEN behaviour rather than wearing `test.fail`, and the difference matters.
-   * `test.fail` is satisfied by any failure, including `createProcess` timing out on a cold node —
-   * so it would report PASSING while never reaching the bug, and rot exactly the way `.fixme`
-   * would. Written this way the case still goes red the day the sheet is fixed, and it also goes
-   * red if its own fixture breaks. Delete it with the fix.
+   * PR1 covers the other path (Details → Edit) and always passed, so this case is the only one that
+   * touches the row action. It asserts BOTH halves: the loaded value reaches the input, and a change
+   * to it reaches the form.
    */
-  test('PR1c: the row Edit action still opens a dead form', async ({
+  test('PR1c: the row Edit action opens the form loaded and editable', async ({
     page,
   }) => {
     const tag = stamp()
@@ -134,14 +127,18 @@ test.describe('07 - processes / list lifecycle', () => {
     await page.getByTestId('process-action-edit').click()
     await expect(sheet(page)).toBeVisible()
 
-    // The header has the name; the form does not. Both asserted, so the case cannot pass on a sheet
-    // that failed to open — which is the whole reason it is not a `test.fail`.
-    await expect(sheet(page)).toContainText(name)
-    await expect(page.locator('#entity-name')).toHaveValue('')
+    await expect(page.locator('#entity-name')).toHaveValue(name)
 
-    // And the fields are dead. This is the half that costs a user their edit: they type, nothing
-    // dirties, and Save stays greyed out with no explanation.
+    // No tab trip first — remounting the fields was the old workaround, and doing it here would
+    // hide the very regression this case exists for.
     await page.locator('#entity-description').fill(`${name}-desc`)
-    await expect(page.getByTestId('sheet-save')).toBeDisabled()
+    await expect(page.getByTestId('sheet-save')).toBeEnabled()
+
+    // Reloaded, not read off the open sheet — the read view renders the FORM's value, so it would
+    // show the description whether or not the save reached the node.
+    await saveSheet(page)
+    await page.reload()
+    await openProcess(page, name)
+    await expect(sheet(page)).toContainText(`${name}-desc`)
   })
 })

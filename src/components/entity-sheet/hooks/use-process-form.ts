@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
@@ -47,22 +47,38 @@ export function useProcessForm(
   const client = useIomClient()
   const uploadQueue = useOptionalUploadQueue()
 
+  const loadedKey = process ? `${process.id}:${process.currentVersion}` : 'new'
+
+  /**
+   * `values`, not a `reset` in an effect — the same ordering `useTemplateForm` documents.
+   *
+   * The row's Edit action opens the sheet in EDIT mode while the fetch is still in flight, so the
+   * Details inputs mount in the very commit the process arrives. A `reset` fired from an effect at
+   * that point drops every registered ref (`_fields = {}`), leaving Name blank and Description dead:
+   * typing dirtied nothing and Save never enabled. `values` resets with `keepFieldsRef`, so the
+   * mounted inputs keep their refs and take the loaded value.
+   *
+   * MEMOISED on `loadedKey`: `processToDraft` mints a new object every render, and `values` re-syncs
+   * whenever the reference changes — unmemoised it would wipe the draft on every keystroke.
+   *
+   * NO `resetOptions: { keepDirtyValues: true }`. It reads plausible and it silently breaks uploads:
+   * a pending pick sits in `files` as a local draft, so on the refetch that follows the upload RHF
+   * keeps that draft and drops the server's real file. The row never appears.
+   */
+  const values = useMemo(
+    () => (process ? processToDraft(process) : EMPTY_PROCESS_DRAFT),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [loadedKey]
+  )
+
   const form = useForm<EntityDraft>({
-    defaultValues: process ? processToDraft(process) : EMPTY_PROCESS_DRAFT,
+    defaultValues: values,
+    values,
   })
 
   const { useCreate, useUpdate } = useProcesses()
   const createMutation = useCreate()
   const updateMutation = useUpdate()
-
-  const loadedKey = process ? `${process.id}:${process.currentVersion}` : 'new'
-  useEffect(() => {
-    form.reset(process ? processToDraft(process) : EMPTY_PROCESS_DRAFT)
-    // Identity key ONLY — same reasoning as use-entity-form: this exists to resync when a DIFFERENT
-    // process arrives, and depending on `form`/`process` would reset mid-edit on any unrelated
-    // re-render, discarding what the user typed.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadedKey])
 
   const submit = form.handleSubmit(async (draft) => {
     const nameless = findEmptyPropertyKey(draft)

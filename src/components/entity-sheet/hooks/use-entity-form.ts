@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
@@ -75,25 +75,39 @@ export function useEntityForm(
   const blankOrResumed = (): EntityDraft =>
     resumeDraft?.draft ?? { ...EMPTY_DRAFT, parentIds: defaultParentIds ?? [] }
 
-  const initial: EntityDraft = entity ? dtoToDraft(entity) : blankOrResumed()
-
-  const form = useForm<EntityDraft>({ defaultValues: initial })
-
-  const { useCreate, useUpdate } = useObjects()
-  const createMutation = useCreate()
-  const updateMutation = useUpdate()
-
   // Reload the form whenever a different entity (or a newer version after save) arrives.
   const loadedKey = entity
     ? `${entity.id}:${entity.currentVersion}`
     : `new:${resumeDraft?.id ?? ''}`
-  useEffect(() => {
-    form.reset(entity ? dtoToDraft(entity) : blankOrResumed())
-    // Identity key ONLY. `form` and `entity` are deliberately absent: this effect exists to resync
-    // when a DIFFERENT entity or draft arrives, and depending on the objects themselves would reset
-    // the form mid-edit on any unrelated re-render, discarding what the user typed.
+
+  /**
+   * `values`, not a `reset` in an effect — the ordering `useTemplateForm` and `useProcessForm` both
+   * document. A sheet opened straight in edit mode mounts its inputs in the commit the entity
+   * arrives, and a reset fired from an effect there drops every registered ref, leaving the fields
+   * blank and unable to dirty.
+   *
+   * MEMOISED on `loadedKey`: `dtoToDraft` mints a new object every render, and `values` re-syncs
+   * whenever the reference changes — unmemoised it would wipe the draft on every keystroke.
+   *
+   * NO `resetOptions: { keepDirtyValues: true }`. It reads plausible and it silently breaks uploads:
+   * a pending pick sits in `files` as a local draft, so on the refetch that follows the upload RHF
+   * keeps that draft and drops the server's real file. The row never appears — FI7, FI10, FI13 and
+   * L18 all went red on exactly that.
+   */
+  const values = useMemo(
+    () => (entity ? dtoToDraft(entity) : blankOrResumed()),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadedKey])
+    [loadedKey]
+  )
+
+  const form = useForm<EntityDraft>({
+    defaultValues: values,
+    values,
+  })
+
+  const { useCreate, useUpdate } = useObjects()
+  const createMutation = useCreate()
+  const updateMutation = useUpdate()
 
   /**
    * Hand pending picks to the background queue, targeted against the committed object.

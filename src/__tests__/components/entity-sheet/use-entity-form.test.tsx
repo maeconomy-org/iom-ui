@@ -413,4 +413,49 @@ describe('useEntityForm', () => {
       expect(result.current.form.getValues('name')).toBe('Wall C')
     )
   })
+
+  /**
+   * A pick sits in `files` as a LOCAL draft until the queue finishes the bytes; the refetch that
+   * follows is the only thing that turns it into the real, previewable file. So the reload must
+   * take the server's list whole — `resetOptions: { keepDirtyValues: true }` looks like the right
+   * guard for a mid-edit refetch and instead keeps that draft over the server's file, which is
+   * the row never appearing (FI7, FI10, FI13, L18).
+   */
+  it('takes the server file list on the refetch that follows an upload', async () => {
+    const { result, rerender } = renderHook(
+      ({ e }: { e: ObjectDTO }) => useEntityForm(e),
+      { wrapper: makeWrapper(), initialProps: { e: entity() } }
+    )
+
+    act(() => {
+      result.current.form.setValue(
+        'files',
+        [
+          {
+            _localId: 'l1',
+            kind: 'upload',
+            blob: new File(['x'], 'plan.png'),
+          },
+        ] as never,
+        { shouldDirty: true }
+      )
+    })
+    // What `submit` does once the write lands: re-baseline so the dirty dot clears.
+    act(() => {
+      result.current.form.reset(result.current.form.getValues())
+    })
+
+    rerender({
+      e: entity({
+        currentVersion: 4,
+        files: [{ id: 'f1', name: 'plan.png' }] as never,
+      }),
+    })
+
+    await waitFor(() => {
+      const files = result.current.form.getValues('files') as { id?: string }[]
+      expect(files).toHaveLength(1)
+      expect(files[0].id).toBe('f1')
+    })
+  })
 })
