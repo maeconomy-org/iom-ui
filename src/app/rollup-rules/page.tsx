@@ -43,7 +43,10 @@ const RollupRuleSheet = dynamic(
   { ssr: false }
 )
 
-type SheetState = { mode: 'create' } | { mode: 'view'; rule: RollupRuleDTO }
+type SheetState =
+  | { mode: 'create' }
+  | { mode: 'view'; rule: RollupRuleDTO }
+  | { mode: 'edit'; rule: RollupRuleDTO }
 
 const ROLLUP_RULE_MESSAGES = {
   deleted: 'rollupRules.deleted',
@@ -119,6 +122,7 @@ export default function RollupRulesPage() {
       onDelete: list.setToDelete,
       onRestore: list.handleRestore,
       onRecompute: handleRecompute,
+      onEdit: (rule) => setSheet({ mode: 'edit', rule }),
     }),
     [list.setToDelete, list.handleRestore, handleRecompute]
   )
@@ -189,7 +193,7 @@ export default function RollupRulesPage() {
           open
           onOpenChange={(open) => !open && setSheet(null)}
           mode={sheet.mode}
-          rule={sheet.mode === 'view' ? sheet.rule : null}
+          rule={sheet.mode === 'create' ? null : sheet.rule}
           onRecompute={(rule) => {
             setSheet(null)
             void handleRecompute(rule)

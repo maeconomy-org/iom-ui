@@ -46,13 +46,13 @@ import {
 } from '../lib/rollup-rule'
 import { anchor } from '@/constants'
 
-export type RollupRuleSheetMode = 'create' | 'view'
+export type RollupRuleSheetMode = 'create' | 'edit' | 'view'
 
 interface RollupRuleSheetProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   mode: RollupRuleSheetMode
-  /** The subject for `view`. */
+  /** The subject for `view` and `edit`. */
   rule?: RollupRuleDTO | null
   /** Queue a recompute of the viewed rule. Omitted where the viewer may not run one. */
   onRecompute?: (rule: RollupRuleDTO) => void
@@ -72,21 +72,25 @@ export function RollupRuleSheet({
       <SheetContent className="flex h-full w-full flex-col gap-0 p-0 sm:max-w-xl">
         <SheetHeader className="border-b px-6 py-4 pr-12">
           <SheetTitle>
-            {mode === 'view'
-              ? (rule?.propertyKey ?? t('rollupRules.title'))
-              : t('rollupRules.createTitle')}
+            {mode === 'create'
+              ? t('rollupRules.createTitle')
+              : (rule?.propertyKey ?? t('rollupRules.title'))}
           </SheetTitle>
           <SheetDescription>
-            {mode === 'view'
-              ? t('rollupRules.keyImmutable')
-              : t('rollupRules.createDescription')}
+            {mode === 'create'
+              ? t('rollupRules.createDescription')
+              : mode === 'edit'
+                ? t('rollupRules.editDescription')
+                : t('rollupRules.keyImmutable')}
           </SheetDescription>
         </SheetHeader>
 
         {/* Mounts fresh per open, so the fields seed at mount rather than being re-synced by an
             effect — the same guard the constant sheet needs. */}
         {open &&
-          (mode === 'view' && rule ? (
+          (mode === 'edit' && rule ? (
+            <RollupRuleEdit rule={rule} onDone={() => onOpenChange(false)} />
+          ) : mode === 'view' && rule ? (
             <RollupRuleView
               rule={rule}
               onDone={() => onOpenChange(false)}
@@ -444,6 +448,158 @@ function RollupRuleForm({ onDone }: { onDone: () => void }) {
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           )}
           {t('rollupRules.create', { count: keys.length })}
+        </Button>
+      </SheetFooter>
+    </form>
+  )
+}
+
+/**
+ * Edit the ONE field a PATCH may change.
+ *
+ * `propertyKey` and `aggregation` are the rule's identity — every stored total pins the ruleId, so
+ * the node 422s a PATCH naming either and changing a key is still delete-then-create. They are
+ * shown here as facts, not inputs, so the sheet states what cannot move rather than leaving the
+ * reader to discover it by finding no field.
+ */
+function RollupRuleEdit({
+  rule,
+  onDone,
+}: {
+  rule: RollupRuleDTO
+  onDone: () => void
+}) {
+  const t = useTranslations()
+  const fieldId = useId()
+  const locale = useLocale() as PropertyDictionaryLocale
+
+  const { useUpdate } = useRollupRules()
+  const updateMutation = useUpdate()
+
+  const [multiplyBy, setMultiplyBy] = useState(
+    () => rule.multiplyBy?.propertyKey ?? ''
+  )
+
+  const normalized = normalizeRollupPropertyKey(multiplyBy)
+  const showNormalized = normalized !== '' && normalized !== multiplyBy
+  // The node 422s a rule multiplying by its own key. One field, one key, so this is a plain
+  // comparison rather than the create form's queue check.
+  const collides = normalized !== '' && normalized === rule.propertyKey
+  const nonNumeric = normalized !== '' && isCertainlyNonNumericKey(normalized)
+
+  const current = rule.multiplyBy?.propertyKey ?? ''
+  const changed = normalized !== current
+  const canSave = changed && !collides && !updateMutation.isPending
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (!canSave) return
+    try {
+      // `null` CLEARS it. Sending `undefined` would mean "no change" and silently keep the
+      // multiplier the user just emptied.
+      await updateMutation.mutateAsync({
+        id: rule.id,
+        body: {
+          multiplyBy: normalized ? { propertyKey: normalized } : null,
+        },
+      })
+      toast.success(t('rollupRules.updated'))
+      onDone()
+    } catch (error) {
+      logger.error('Update rollup rule failed', { err: error, id: rule.id })
+      const { key, values } = rollupRuleErrorMessage(error)
+      toast.error(t(key, values))
+    }
+  }
+
+  const hintId = `${fieldId}-multiply-by-hint`
+
+  return (
+    <form
+      onSubmit={submit}
+      className="-mx-1 flex min-h-0 flex-1 flex-col overflow-hidden px-1"
+    >
+      <SheetBody className="space-y-5">
+        <Fact label={t('rollupRules.property')}>
+          <span className="font-medium">
+            {resolvePropertyLabel(rule.propertyKey, undefined, locale)}
+          </span>
+          <span className="ml-1.5 font-mono text-xs text-muted-foreground">
+            {rule.propertyKey}
+          </span>
+        </Fact>
+        <Fact label={t('rollupRules.aggregation')}>
+          {t(`rollupRules.aggregations.${rule.aggregation}`)}
+        </Fact>
+
+        <div className="space-y-2">
+          <Label htmlFor={`${fieldId}-multiply-by`}>
+            {t('rollupRules.multiplyBy')}
+          </Label>
+          <PropertyNameCombobox
+            id={`${fieldId}-multiply-by`}
+            value={multiplyBy}
+            onChange={(key) => setMultiplyBy(key)}
+            placeholder={t('rollupRules.placeholders.multiplyBy')}
+            aria-invalid={collides}
+            aria-describedby={hintId}
+            data-testid="rollup-rule-edit-multiply-by"
+          />
+          <div id={hintId} className="space-y-1">
+            {showNormalized && (
+              <p className="text-xs text-muted-foreground">
+                {t('rollupRules.normalizedAs', { key: normalized })}
+              </p>
+            )}
+            {collides ? (
+              <p
+                className="text-xs text-destructive"
+                data-testid="rollup-rule-edit-collision"
+              >
+                {t('rollupRules.multiplyBySelf')}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                {t('rollupRules.multiplyByHint')}
+              </p>
+            )}
+            {nonNumeric && !collides && (
+              <p
+                className="flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-500"
+                data-testid="rollup-rule-edit-non-numeric"
+              >
+                <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>{t('rollupRules.multiplyByNonNumeric')}</span>
+              </p>
+            )}
+          </div>
+        </div>
+
+        <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+          {t('rollupRules.replaceToChange')}
+        </p>
+      </SheetBody>
+
+      <SheetFooter className="flex-row gap-2 border-t px-6 py-3">
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          onClick={onDone}
+          disabled={updateMutation.isPending}
+        >
+          {t('common.cancel')}
+        </Button>
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={!canSave}
+          data-testid="rollup-rule-edit-submit"
+        >
+          {updateMutation.isPending && (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          )}
+          {t('common.save')}
         </Button>
       </SheetFooter>
     </form>

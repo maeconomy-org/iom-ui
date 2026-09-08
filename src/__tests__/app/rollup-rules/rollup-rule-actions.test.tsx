@@ -23,6 +23,7 @@ const actions = {
   onDelete: vi.fn(),
   onRestore: vi.fn(),
   onRecompute: vi.fn(),
+  onEdit: vi.fn(),
 }
 
 const rule = (over: Partial<RollupRuleDTO> = {}) =>
@@ -89,9 +90,15 @@ describe('rollup rule row actions', () => {
     expect(screen.queryByTestId('rollup-rule-action-recompute')).toBeNull()
   })
 
-  it('still refuses edit and share, which the node has no route for', async () => {
+  // Edit reaches exactly one field. Share has no route at all: a rule is the node's or yours.
+  it('offers edit, but never share', async () => {
     await openMenu(rule())
-    expect(screen.queryByTestId('rollup-rule-action-edit')).toBeNull()
+    expect(screen.getByTestId('rollup-rule-action-edit')).toBeInTheDocument()
     expect(screen.queryByTestId('rollup-rule-action-share')).toBeNull()
+  })
+
+  it('offers no edit on a deleted rule either', async () => {
+    await openMenu(rule({ deleted: true }))
+    expect(screen.queryByTestId('rollup-rule-action-edit')).toBeNull()
   })
 })

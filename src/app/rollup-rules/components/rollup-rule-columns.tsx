@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react'
 import type { ColumnDef } from '@tanstack/react-table'
-import { RefreshCw, RotateCcw, Trash2 } from 'lucide-react'
+import { Pencil, RefreshCw, RotateCcw, Trash2 } from 'lucide-react'
 
 import { Badge } from '@/components/ui'
 import {
@@ -30,6 +30,7 @@ export interface RollupRuleColumnActions {
   onDelete: (rule: RollupRuleDTO) => void
   onRestore: (rule: RollupRuleDTO) => void
   onRecompute: (rule: RollupRuleDTO) => void
+  onEdit: (rule: RollupRuleDTO) => void
 }
 
 interface BuildRollupRuleColumnsOptions {
@@ -122,8 +123,9 @@ function RollupRuleActionsCell({
 /**
  * No Share, on any row: a rule is the node's or yours, and another account's 404s on every route.
  *
- * No Edit either, for now. `propertyKey` is the rule's identity — every state row pins the ruleId
- * — so changing a key is still delete-then-create.
+ * Edit reaches exactly ONE field, `multiplyBy`. `propertyKey` and `aggregation` remain the rule's
+ * identity — every state row pins the ruleId — so changing a key is still delete-then-create, and
+ * the edit sheet shows both as facts rather than inputs.
  *
  * Recompute is offered on a live rule you own. Rules converge on their own after any write to a
  * subtree and on the node's scheduled sweep, so this is the explicit path, not the only one.
@@ -150,6 +152,12 @@ function rowActions(
   }
 
   return [
+    {
+      key: 'edit',
+      label: t('common.edit'),
+      icon: Pencil,
+      onSelect: () => actions.onEdit(rule),
+    },
     {
       key: 'recompute',
       label: t('rollupRules.recompute'),

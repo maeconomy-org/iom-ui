@@ -6,7 +6,11 @@ import {
   useQueryClient,
   keepPreviousData,
 } from '@tanstack/react-query'
-import type { CreateRollupRuleBody, ListRollupRulesQuery } from 'io2p-client'
+import type {
+  CreateRollupRuleBody,
+  ListRollupRulesQuery,
+  UpdateRollupRuleBody,
+} from 'io2p-client'
 
 import { useIomClient } from '@/lib/io2p'
 import { queryKeys } from '@/lib/query-keys'
@@ -57,6 +61,27 @@ function useRollupRuleCreate() {
   })
 }
 
+/**
+ * The only PATCH this resource has: `multiplyBy`, and `null` clears it.
+ *
+ * `propertyKey` and `aggregation` stay immutable — every stored total pins the ruleId, so changing
+ * a key is still delete-then-create. Changing the multiplier re-arms every entity holding the key
+ * on the node, which is why the totals cannot keep their old meaning and need no invalidation here
+ * beyond the rule itself.
+ */
+function useRollupRuleUpdate() {
+  const client = useIomClient()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (vars: { id: string; body: UpdateRollupRuleBody }) =>
+      client.rollupRules.update(vars.id, vars.body),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: queryKeys.rollupRules.detail(vars.id) })
+      qc.invalidateQueries({ queryKey: queryKeys.rollupRules.lists() })
+    },
+  })
+}
+
 function useRollupRuleRemove() {
   const client = useIomClient()
   const qc = useQueryClient()
@@ -100,6 +125,7 @@ const rollupRuleBundle = {
   useList: useRollupRuleList,
   useOwnRules: useOwnRollupRules,
   useCreate: useRollupRuleCreate,
+  useUpdate: useRollupRuleUpdate,
   useRemove: useRollupRuleRemove,
   useRestore: useRollupRuleRestore,
   useRecompute: useRollupRuleRecompute,

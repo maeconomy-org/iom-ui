@@ -1604,6 +1604,8 @@
     "created": "{count, plural, one {Rollup rule created} other {# rollup rules created}}",
     "createdPartial": "{created} created, {failed} failed.",
     "multiplyBy": "Counted by",
+    "editDescription": "Change what this rule counts by. The property and the aggregation cannot move.",
+    "updated": "Rollup rule updated. Totals recalculate in the background.",
     "multiplyByHint": "Optional. Scales each value by another property on the same object, so 10 chairs at 12 kg total 120 kg.",
     "multiplyBySelf": "A rule cannot count itself. Remove this key from the list, or count by a different one.",
     "multiplyByNonNumeric": "This property usually holds text. A value it cannot read is left out of the total entirely.",
