@@ -53,7 +53,7 @@ pnpm vitest run src/__tests__/lib/search-parser.test.ts
 - **Styling**: Tailwind CSS with CSS variables for theming (`globals.css`)
 - **Forms**: React Hook Form + Zod validation (`src/lib/validations/`)
 - **State**: React Query (TanStack Query) v5 for server state, React context for client state — all API hooks in `src/hooks/api/`
-- **Backend SDK**: `iom-sdk` package — single client in `src/lib/sdk-client.ts`
+- **Backend SDK**: `io2p-client` package — single client in `src/lib/io2p.ts`
 - **Charts**: ECharts via `echarts-for-react`
 - **i18n**: `next-intl` — locale files in `src/messages/{en,nl}.json`
 - **Auth**: mTLS client certificate authentication via `src/contexts/auth-context.tsx`
@@ -443,7 +443,7 @@ To add a new variable: update `buildRuntimeConfig()`, `ClientConfig`, and `DEFAU
 
 **Optional**: `HERE_API_KEY` (address lookups), `EMAIL_LOGIN_ENABLED`, Sentry (`SENTRY_DSN`/`SENTRY_ORG`/`SENTRY_PROJECT`/`SENTRY_ENABLED`), branding (`APP_NAME`/`APP_DESCRIPTION`/`APP_ACRONYM`), import limits (`MAX_IMPORT_FILE_SIZE_MB`/`MAX_IMPORT_PAYLOAD_MB`/`MAX_OBJECTS_PER_IMPORT`), attachment cap (`MAX_ATTACHMENT_SIZE_MB` — S3-streamed upload, default 1024 = 1 GB hard ceiling at 8 MB × 128 parts), `LOG_LEVEL` (server emit gate + browser console level outside production), `LOG_SHIP_LEVEL` (minimum level the browser ships to `/api/telemetry`; default `info` in production, off in dev), `OTEL_ENABLED` (master switch for the server OTel SDK, default `false` — nothing boots without it), `OTEL_EXPORTER_OTLP_ENDPOINT` + `OTEL_EXPORTER_OTLP_HEADERS` (server-held OTLP collector coupling; when set, `/api/telemetry` forwards browser records as OTLP logs), `APP_VERSION` + `DEPLOYMENT_ENVIRONMENT` + `SERVICE_NAMESPACE` (OTel resource attributes, and the `service.version`/`deployment.environment` on forwarded browser records — without them everything reports as `unknown` and you cannot tell releases apart), `TRUSTED_PROXY_HOPS` (how many proxies in front of the app append to `x-forwarded-for`; default 1. Set it to 2 when nginx fronts a platform ingress that also appends — too low and every client behind the outermost proxy shares ONE rate-limit bucket, too high and you key on a spoofable client-supplied entry), `CONTACT_URL`, `SUPPORT_EMAIL`.
 
-## SDK (`iom-sdk`)
+## SDK (`io2p-client`)
 
 ### Key Architecture
 
@@ -454,9 +454,26 @@ To add a new variable: update `buildRuntimeConfig()`, `ClientConfig`, and `DEFAU
 
 ### After SDK Changes
 
-1. Run `npm run build` in `iom-sdk/`
-2. Copy built dist to UI's node_modules: `cp -R iom-sdk/dist/* iom-ui/node_modules/.pnpm/iom-sdk@*/node_modules/iom-sdk/dist/`
-3. Run `pnpm typecheck` in UI to verify
+The package is **`io2p-client`**, and its repo is `../io2p/io2p-client` — NOT `../iom/iom-sdk`.
+That directory still exists and still builds, but it is `iom-sdk@0.2.5`, last touched 2026-06-04,
+and nothing in this app depends on it. Following the old instructions was worse than doing nothing:
+the `cp` targets a `node_modules/.pnpm/iom-sdk@*/` path that does not exist, so it copies nothing,
+and `pnpm typecheck` then passes BECAUSE nothing changed — a green light that means the sync did
+not happen.
+
+1. Run `pnpm build` in `io2p-client/` (tsup).
+2. Copy the built dist into this app's node_modules:
+
+   ```
+   cp -R ../../io2p/io2p-client/dist/* \
+     node_modules/.pnpm/io2p-client@*/node_modules/io2p-client/dist/
+   ```
+
+   The pnpm folder is keyed by the version in the LOCKFILE, not by the version in the SDK's
+   `package.json` — they differ today (lockfile 0.1.3, repo 0.2.0), so the glob is load-bearing.
+
+3. Run `pnpm typecheck` in this app to verify. A missed sync shows up here as errors naming SDK
+   types (an `ApiError` rename and the rollup `unitCount`/`multipliedBy` fields did exactly that).
 
 > If you use Claude Code, the `/sdk-sync` slash command runs all three steps and reports the result. See **Claude Code Workflow** below.
 
