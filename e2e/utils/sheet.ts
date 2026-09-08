@@ -58,6 +58,27 @@ export async function saveSheet(
 }
 
 /**
+ * Save, and wait for the write to LAND rather than merely for the click.
+ *
+ * `saveSheet` returns as soon as the button was clicked. Navigating straight afterwards aborts the
+ * request still in flight, and an aborted fetch logs a console error — which the harness fails the
+ * test on. The symptom is a NetworkError with `status: 0` and a test that reads as a broken save
+ * rather than as a race the spec created itself.
+ *
+ * Every rollups case that writes then polls needs this: the poll's first act is `page.goto`.
+ */
+export async function saveSheetAndSettle(page: Page): Promise<void> {
+  // Armed BEFORE the click, or the response can land before anything is listening.
+  const written = page.waitForResponse(
+    (res) =>
+      ['PATCH', 'POST'].includes(res.request().method()) &&
+      /\/api\/v1\/(objects|processes)\//.test(res.url())
+  )
+  await saveSheet(page, { expectClose: false })
+  await written
+}
+
+/**
  * Appends a property row and returns its index. Separate from `fillProperty` because deciding
  * whether to add by reading `count()` does not retry, so an unrendered row reads as zero.
  */

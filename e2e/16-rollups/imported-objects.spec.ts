@@ -84,9 +84,9 @@ test.describe('16 - rollups / imported objects', () => {
   test('RU20: a rule normalizes a typed name the same way the importer will', async ({
     page,
   }) => {
-    // The rule is created FIRST on purpose: the worker recomputes on a write to the subtree and
-    // never on a rule, so a rule added after the import would stay synthesized and render nothing
-    // (RU9 pins that). Here the import IS the write that arms it.
+    // The rule is created first, but that is no longer load-bearing: a rule change now arms every
+    // holder of its key, so either order converges (RU9 pins that). What this case is actually
+    // about is the SPELLING — that a hand-typed name normalizes to the key the importer writes.
     await page.goto('/rollup-rules')
     await expect(page.getByTestId('data-table')).toBeVisible()
     await tour(page, 'rollupRulesCreate').click()
@@ -135,14 +135,17 @@ test.describe('16 - rollups / imported objects', () => {
   })
 
   /**
-   * ⏸ DEFERRED — part of the wider rollups work. See `docs/e2e-docs/e2e-run-2026-08-31.md`
-   * "Still open" #4.
+   * Was DEFERRED, and the reason it was deferred is the defect that has since been fixed.
    *
-   * Measured on the node rather than guessed: the parent's `/rollups` response carries every SEED
-   * rule with a real `computedAt`, and no entry for this run's user rule at all. So it is not the
-   * key seam this file was written to catch — the compute ran and the rule was not in it.
+   * Measured on the node at the time: the parent's `/rollups` response carried every SEED rule with
+   * a real `computedAt` and no entry for this run's user rule at all. That is exactly the arming
+   * gap — a rule created after the last write to a subtree computed NEVER, so a hand-typed rule
+   * over freshly imported data could not appear however long the test waited. Creating a rule now
+   * arms every holder of its key, so the case is live again.
+   *
+   * Renamed from RU22, which `cross-user.spec.ts` already uses.
    */
-  test.fixme('RU22: the rule totals the imported value onto the parent', async ({
+  test('RU27: the rule totals the imported value onto the parent', async ({
     page,
   }, testInfo) => {
     // ~70s to settle by contract (a 30s cooldown, then a reaper scanning every 30s), so this

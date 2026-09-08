@@ -8,6 +8,7 @@ import {
   openCreateSheet,
   openObjectSheet,
   saveSheet,
+  saveSheetAndSettle,
   sheet,
 } from '../utils/sheet'
 import { rowActions, tour } from '../utils/selectors'
@@ -119,10 +120,10 @@ test.describe('16 - rollups / lifecycle', () => {
     await page.close()
   })
 
-  test('RU9: a rule added after the objects renders nothing', async ({
+  test('RU9: a rule added after the objects computes on its own', async ({
     page,
   }, testInfo) => {
-    testInfo.setTimeout(180_000)
+    testInfo.setTimeout(300_000)
 
     await page.goto('/objects')
     await expect(page.getByTestId('data-table')).toBeVisible()
@@ -131,19 +132,40 @@ test.describe('16 - rollups / lifecycle', () => {
 
     await createRule(page, KEY)
 
-    // `computedAt: null` — the worker recomputes on a write to the SUBTREE, never on a rule. A
-    // rule added after the last write stays synthesized, and rendering "Updating…" forever would
-    // promise a number that is not coming.
-    await page.goto('/objects')
-    await expect(page.getByTestId('data-table')).toBeVisible()
-    await openObjectSheet(page, rowFor(page, PARENT))
-    await expect(page.getByTestId('rollup-card')).toHaveCount(0)
+    // The defect this file was written around: a rule used to arm nothing, so a rule created
+    // after the last write to a subtree computed NEVER and the card stayed absent forever.
+    // Creating the rule now arms every holder of its key, with no further write to the data.
+    //
+    // Slow on purpose. Storm control is per TARGET: an entity computed inside the cooldown is
+    // deferred whatever rule arrives next, and the reaper re-drives on its own tick — so a rule
+    // over a subtree written moments ago (as here) can take ~60s, where the same rule over quiet
+    // data lands in under a second.
+    await pollParent(
+      page,
+      hasCard,
+      'a card from the rule alone, with no further write'
+    )
   })
 
-  test('RU10: a write to the subtree then produces the total', async ({
+  test('RU10: a write to the subtree moves the total', async ({
     page,
   }, testInfo) => {
     testInfo.setTimeout(300_000)
+
+    // RU9 already left a card on the parent, so asserting one EXISTS here could no longer fail.
+    // What this case owns is the other half of convergence: a rule arms once, but a write to the
+    // subtree has to re-arm it. So read the line first and require it to move.
+    //
+    // The reading is compared to itself rather than to a number: the file's rule is that nothing
+    // compares arithmetic across a write, because a read straight after one may still return the
+    // old totals marked `stale: false`.
+    await page.goto('/objects')
+    await expect(page.getByTestId('data-table')).toBeVisible()
+    await openObjectSheet(page, rowFor(page, PARENT))
+    const before = ((await page.getByTestId('rollup-line').textContent()) ?? '')
+      .replace(/\s+/g, ' ')
+      .trim()
+    await page.keyboard.press('Escape')
 
     // Touch the child, which is what arms the recompute for its whole ancestor chain.
     await page.goto('/objects')
@@ -154,9 +176,15 @@ test.describe('16 - rollups / lifecycle', () => {
     await enterEditMode(page)
     await page.getByTestId('property-toggle-0').click()
     await page.getByTestId('property-value-0-0').fill('12 kg')
-    await saveSheet(page, { expectClose: false })
+    await saveSheetAndSettle(page)
 
-    await pollParent(page, hasCard, 'a card after the subtree was written')
+    const lineMoved = async (p: Page) => {
+      const now = ((await p.getByTestId('rollup-line').textContent()) ?? '')
+        .replace(/\s+/g, ' ')
+        .trim()
+      return now !== '' && now !== before
+    }
+    await pollParent(page, lineMoved, 'a total that moved after the write')
   })
 
   test('RU4: an orphan key renders a card the parent never authored', async ({
@@ -178,7 +206,7 @@ test.describe('16 - rollups / lifecycle', () => {
     await enterEditMode(page)
     const next = await addProperty(page, 1)
     await fillProperty(page, next, orphanKey, '7 kg')
-    await saveSheet(page, { expectClose: false })
+    await saveSheetAndSettle(page)
 
     await pollParent(
       page,
@@ -212,7 +240,7 @@ test.describe('16 - rollups / lifecycle', () => {
     // the count of rows the CHILD now has rather than a constant.
     const slot = await addProperty(page, 2)
     await fillProperty(page, slot, key, '2 t')
-    await saveSheet(page, { expectClose: false })
+    await saveSheetAndSettle(page)
 
     // The parent authored nothing under this key, so the card is an orphan and everything in it
     // came from below. One bucket: a second would mean the tonnes were treated as their own

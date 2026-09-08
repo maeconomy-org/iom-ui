@@ -9,6 +9,7 @@ import {
   openObjectSheet,
   removeProperty,
   saveSheet,
+  saveSheetAndSettle,
   sheet,
 } from '../utils/sheet'
 import { rowActions, tour } from '../utils/selectors'
@@ -125,9 +126,9 @@ test.describe('16 - rollups / deletions', () => {
   test.describe.configure({ mode: 'serial' })
 
   /**
-   * The rule is created FIRST. A rule added after the objects renders nothing, forever — the worker
-   * recomputes on a write to the subtree, never on a rule — so a fixture in the other order fails
-   * for a reason that has nothing to do with deleting.
+   * The rule is created FIRST. Either order converges now that a rule change arms every holder of
+   * its key, but creating it first still settles fastest: the objects' own writes then arm the
+   * lane, instead of the fixture waiting out a per-target cooldown it just triggered.
    */
   test.beforeAll(async ({ browser }, testInfo) => {
     testInfo.setTimeout(300_000)
@@ -187,7 +188,7 @@ test.describe('16 - rollups / deletions', () => {
     await enterEditMode(page)
     await removeProperty(page, 0)
     await expect(page.getByTestId('property-deleted-0')).toBeVisible()
-    await saveSheet(page, { expectClose: false })
+    await saveSheetAndSettle(page)
 
     // The child was the only numeric contributor, so with its value gone the parent has nothing
     // below it and the card must go too — a deleted value that still counted would be invisible.
@@ -211,7 +212,7 @@ test.describe('16 - rollups / deletions', () => {
     await expect(page.getByTestId('property-deleted-0')).toBeVisible()
     await page.getByTestId('property-deleted-0-restore').click()
     await expect(page.getByTestId('property-row-0')).toBeVisible()
-    await saveSheet(page, { expectClose: false })
+    await saveSheetAndSettle(page)
     await pollParentCard(page, true)
 
     await openChild(page)

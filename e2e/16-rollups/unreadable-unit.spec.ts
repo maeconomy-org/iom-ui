@@ -8,6 +8,7 @@ import {
   openCreateSheet,
   openObjectSheet,
   saveSheet,
+  saveSheetAndSettle,
   sheet,
 } from '../utils/sheet'
 import { rowActions, tour } from '../utils/selectors'
@@ -133,7 +134,7 @@ test.describe('16 - rollups / an unreadable unit', () => {
     await enterEditMode(page)
     await page.getByTestId('property-toggle-0').click()
     await page.getByTestId('property-value-0-0').fill('5 lux')
-    await saveSheet(page, { expectClose: false })
+    await saveSheetAndSettle(page)
 
     // The skip is real and the reader never sees it: with nothing below contributing a number the
     // parent is the sole contributor again, so the whole card goes rather than gaining a badge.
