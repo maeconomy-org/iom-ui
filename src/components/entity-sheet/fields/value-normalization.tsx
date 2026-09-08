@@ -21,8 +21,9 @@ import type { DerivedValues } from './value-provenance'
  *
  * - a unit CONVERSION ("2 t" -> 2000 kg). Hidden whenever the canonical form is just the raw text
  *   again, which covers nearly every value.
- * - a value a formula DEPENDS ON that the normalizer could not read. The node drops such a value
- *   from the calculation, so the result is quietly wrong with nothing on screen to say so.
+ * - a value some CALCULATION depends on that the normalizer could not read. The node drops such a
+ *   value, so the result is quietly wrong with nothing on screen to say so. Two things calculate
+ *   with a value: a formula that binds it, and a rollup rule that scales its totals by it.
  *
  * The second condition is deliberately about being USED, not about failing to parse. A barcode or a
  * serial number never parses as a quantity, and that is not a mistake — flagging it would put a
@@ -32,25 +33,28 @@ import type { DerivedValues } from './value-provenance'
 export function ValueNormalization({
   value,
   usedInFormula = false,
+  usedAsMultiplier = false,
   className,
 }: {
   value: Pick<DraftValue, 'data' | 'num' | 'unit' | 'parse'>
   /** True when some derived value binds this one — see `formulaBoundValueIds`. */
   usedInFormula?: boolean
+  /** True when a rollup rule scales its totals by this value's key — see `multiplierKeysOf`. */
+  usedAsMultiplier?: boolean
   className?: string
 }) {
   const t = useTranslations()
   const format = useFormatter()
 
   if (value.parse?.ok === false) {
-    if (!usedInFormula) return null
+    if (!usedInFormula && !usedAsMultiplier) return null
     const detail = t(parseFailureKey(value.parse))
     return (
       <Marker
         state="excluded"
         className={cn('text-destructive', className)}
         label={detail}
-        tooltip={`${detail} — ${t('objects.properties.excludedFromFormulas')}`}
+        tooltip={`${detail} — ${t(excludedFromKey(usedInFormula, usedAsMultiplier))}`}
         icon={<AlertTriangle className="h-3.5 w-3.5" />}
       />
     )
@@ -84,6 +88,21 @@ export function formulaBoundValueIds(
     }
   }
   return bound
+}
+
+/**
+ * Every property key some rollup rule multiplies by. A value under one of these keys is an input to
+ * a total even though nothing on the row says so — an unreadable one does not make the total empty,
+ * it drops that object's whole contribution.
+ */
+export function multiplierKeysOf(
+  rollups: ReadonlyMap<string, { multipliedBy?: string }> | undefined
+): Set<string> {
+  const keys = new Set<string>()
+  for (const entry of rollups?.values() ?? []) {
+    if (entry.multipliedBy) keys.add(entry.multipliedBy.toLowerCase())
+  }
+  return keys
 }
 
 /**
@@ -129,6 +148,20 @@ function Marker({
       </Tooltip>
     </TooltipProvider>
   )
+}
+
+// Naming the consumer is the whole point of the warning: "not a number" is obvious from the text,
+// "and therefore your building's weight is short by one pump" is not. Exported because the message
+// it picks lives in a tooltip, which Radix renders in a portal only once opened — the choice is
+// worth asserting directly rather than through a hover.
+export function excludedFromKey(
+  inFormula: boolean,
+  asMultiplier: boolean
+): string {
+  if (inFormula && asMultiplier) return 'objects.properties.excludedFromBoth'
+  return asMultiplier
+    ? 'objects.properties.excludedFromRollups'
+    : 'objects.properties.excludedFromFormulas'
 }
 
 function parseFailureKey(parse: ValueParse): string {

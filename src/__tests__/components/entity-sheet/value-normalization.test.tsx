@@ -5,6 +5,8 @@ import { render, screen } from '@testing-library/react'
 import {
   ValueNormalization,
   formulaBoundValueIds,
+  multiplierKeysOf,
+  excludedFromKey,
 } from '@/components/entity-sheet/fields/value-normalization'
 import type { DraftValue, ValueProvenance } from '@/lib/entity'
 
@@ -13,11 +15,16 @@ vi.mock('next-intl', () => ({
   useFormatter: () => ({ number: (n: number) => String(n) }),
 }))
 
-function renderValue(value: Partial<DraftValue>, usedInFormula = false) {
+function renderValue(
+  value: Partial<DraftValue>,
+  usedInFormula = false,
+  usedAsMultiplier = false
+) {
   return render(
     React.createElement(ValueNormalization, {
       value: value as DraftValue,
       usedInFormula,
+      usedAsMultiplier,
     })
   )
 }
@@ -107,6 +114,24 @@ describe('ValueNormalization', () => {
     ).toBeInTheDocument()
   })
 
+  // A rollup that scales by this key is the second thing that computes with a value, and it
+  // never appears in the formula traces — so the old `usedInFormula` gate rendered nothing while
+  // the node dropped this object's WHOLE contribution from the total.
+  it('warns when a rollup scales its totals by an unreadable value', () => {
+    renderValue(
+      {
+        data: '5 stuks',
+        parse: { ok: false, normVersion: 1, reason: 'unknown-unit' },
+      },
+      false,
+      true
+    )
+
+    expect(
+      screen.getByRole('button', { name: 'objects.properties.unknownUnit' })
+    ).toBeInTheDocument()
+  })
+
   it('says nothing for a value the node never normalized', () => {
     const { container } = renderValue({ data: '3' })
 
@@ -164,5 +189,40 @@ describe('formulaBoundValueIds', () => {
 
   it('tolerates a derived value with no trace', () => {
     expect(formulaBoundValueIds(new Map([['d1', undefined]])).size).toBe(0)
+  })
+})
+
+describe('multiplierKeysOf', () => {
+  it('collects every key a rule multiplies by, lowercased', () => {
+    const keys = multiplierKeysOf(
+      new Map([
+        ['weight', { multipliedBy: 'Quantity' }],
+        ['volume', { multipliedBy: 'quantity' }],
+        ['cost', {}],
+      ])
+    )
+
+    expect([...keys]).toEqual(['quantity'])
+  })
+
+  it('is empty when no rule multiplies, and tolerates no rollups at all', () => {
+    expect(multiplierKeysOf(new Map([['weight', {}]])).size).toBe(0)
+    expect(multiplierKeysOf(undefined).size).toBe(0)
+  })
+})
+
+// Which consumer is named matters: "not a number" is obvious from the text, "and so your
+// building's weight is short by one pump" is not.
+describe('excludedFromKey', () => {
+  it('names the consumer that will drop the value', () => {
+    expect(excludedFromKey(true, false)).toBe(
+      'objects.properties.excludedFromFormulas'
+    )
+    expect(excludedFromKey(false, true)).toBe(
+      'objects.properties.excludedFromRollups'
+    )
+    expect(excludedFromKey(true, true)).toBe(
+      'objects.properties.excludedFromBoth'
+    )
   })
 })

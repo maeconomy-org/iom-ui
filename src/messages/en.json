@@ -607,6 +607,8 @@
       "noNumber": "No number found",
       "canonicalValue": "Canonical value",
       "excludedFromFormulas": "excluded from the formulas that use it",
+      "excludedFromRollups": "excluded from the totals that count by it",
+      "excludedFromBoth": "excluded from the formulas and the totals that use it",
       "rollupTotal": "Subtree total",
       "rollupContributors": "{count, plural, one {# value} other {# values}}",
       "rollupSkipped": "{count, plural, one {# not counted} other {# not counted}}",

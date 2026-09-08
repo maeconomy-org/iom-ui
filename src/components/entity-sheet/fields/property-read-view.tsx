@@ -31,7 +31,11 @@ import { FilesDisclosure } from '../files'
 import { DeletedRow } from './deleted-row'
 import { RollupLine, ownShare, rollupSaysSomething } from './rollup-line'
 import { FormulaSummary } from './formula-value-editor'
-import { ValueNormalization, formulaBoundValueIds } from './value-normalization'
+import {
+  ValueNormalization,
+  formulaBoundValueIds,
+  multiplierKeysOf,
+} from './value-normalization'
 import {
   ValueProvenanceDisplay,
   labelForValueId,
@@ -109,6 +113,9 @@ export function PropertyReadView({
     () => formulaBoundValueIds(derivedValues),
     [derivedValues]
   )
+  // From the RAW map, not `liveRollups` below: an entry with nothing to show still names the key
+  // its rule multiplies by, and that key's values are still inputs to a total.
+  const multiplierKeys = useMemo(() => multiplierKeysOf(rollups), [rollups])
 
   /**
    * Every consumer below reads THIS map, not the prop.
@@ -262,6 +269,7 @@ export function PropertyReadView({
               property={p}
               derivedValues={derivedValues}
               boundValueIds={boundValueIds}
+              usedAsMultiplier={multiplierKeys.has(p.key.toLowerCase())}
               labelForValue={(id) => labelForValueId(properties, id, locale)}
               entityId={entityId}
               onFileChange={onFileChange}
@@ -343,6 +351,7 @@ function PropertyCard({
   property,
   derivedValues,
   boundValueIds,
+  usedAsMultiplier = false,
   labelForValue,
   entityId,
   onFileChange,
@@ -352,6 +361,8 @@ function PropertyCard({
   property: DraftProperty
   derivedValues: DerivedValues
   boundValueIds: ReadonlySet<string>
+  /** A rollup rule scales its totals by this property — so its values are calculation inputs. */
+  usedAsMultiplier?: boolean
   labelForValue: LabelForValue
   entityId?: string
   onFileChange?: FileChange
@@ -437,6 +448,7 @@ function PropertyCard({
             value={v}
             derivedValues={derivedValues}
             boundValueIds={boundValueIds}
+            usedAsMultiplier={usedAsMultiplier}
             labelForValue={labelForValue}
             entityId={entityId}
             onFileChange={onFileChange}
@@ -452,6 +464,7 @@ function ValueRow({
   value,
   derivedValues,
   boundValueIds,
+  usedAsMultiplier = false,
   labelForValue,
   entityId,
   onFileChange,
@@ -460,6 +473,7 @@ function ValueRow({
   value: DraftValue
   derivedValues: DerivedValues
   boundValueIds: ReadonlySet<string>
+  usedAsMultiplier?: boolean
   labelForValue: LabelForValue
   entityId?: string
   onFileChange?: FileChange
@@ -505,6 +519,7 @@ function ValueRow({
         <ValueNormalization
           value={value}
           usedInFormula={!!value.id && boundValueIds.has(value.id)}
+          usedAsMultiplier={usedAsMultiplier}
         />
         {provenance ? (
           <ValueProvenanceDisplay

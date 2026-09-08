@@ -44,7 +44,11 @@ import {
 import { AttachmentModal, FilesDisclosure } from '../files'
 import { DeletedRow } from './deleted-row'
 import { PropertyReadView } from './property-read-view'
-import { ValueNormalization, formulaBoundValueIds } from './value-normalization'
+import {
+  ValueNormalization,
+  formulaBoundValueIds,
+  multiplierKeysOf,
+} from './value-normalization'
 import {
   ValueProvenanceDisplay,
   labelForValueId,
@@ -163,6 +167,7 @@ export function PropertyFields({
   // something else happens to re-render it. Declared before the early return so the hook order
   // does not change with `editing`.
   const readProperties = useWatch({ control: form.control, name: basePath })
+  const multiplierKeys = useMemo(() => multiplierKeysOf(rollups), [rollups])
 
   /**
    * Patch one file anywhere under the properties tree, found by its `_localId` (unique across the
@@ -256,6 +261,7 @@ export function PropertyFields({
           allowFiles={allowFiles}
           basePath={basePath}
           siblingSource={siblingSource}
+          multiplierKeys={multiplierKeys}
         />
       ))}
       {!label && addButton}
@@ -277,6 +283,7 @@ function PropertyRow({
   allowFiles,
   basePath,
   siblingSource,
+  multiplierKeys,
 }: {
   form: UseFormReturn<EntityDraft>
   index: number
@@ -288,6 +295,8 @@ function PropertyRow({
   allowFiles: boolean
   basePath: PropertiesPath
   siblingSource?: EntityDraft['properties']
+  /** Property keys some rollup rule multiplies by — their values are calculation inputs. */
+  multiplierKeys: ReadonlySet<string>
 }) {
   const t = useTranslations()
   const locale = useLocale() as PropertyDictionaryLocale
@@ -745,6 +754,9 @@ function PropertyRow({
                         value={value}
                         usedInFormula={
                           !!value.id && boundValueIds.has(value.id)
+                        }
+                        usedAsMultiplier={
+                          !!propKey && multiplierKeys.has(propKey.toLowerCase())
                         }
                       />
                     )}
