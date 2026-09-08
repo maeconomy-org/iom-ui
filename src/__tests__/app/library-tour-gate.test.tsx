@@ -64,6 +64,7 @@ vi.mock('@/app/rollup-rules/hooks/use-rollup-rules', () => ({
     useList: () => list,
     useRemove: () => ({}),
     useRestore: () => ({}),
+    useRecompute: () => ({ mutateAsync: vi.fn() }),
   }),
 }))
 vi.mock('@/hooks/api/leaves', () => ({

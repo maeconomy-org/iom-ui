@@ -81,12 +81,28 @@ function useRollupRuleRestore() {
   })
 }
 
+/**
+ * Queue a recompute across every entity holding the rule's key, plus their ancestors.
+ *
+ * The node answers 202 the moment the job is enqueued, so this resolving means QUEUED, never
+ * done — the totals land as the lane drains. Nothing here can be invalidated on success for the
+ * same reason: the rule itself did not change, and the entity rollups it will move are keyed per
+ * object and refetched by their own poll.
+ */
+function useRollupRuleRecompute() {
+  const client = useIomClient()
+  return useMutation({
+    mutationFn: (vars: { id: string }) => client.rollupRules.recompute(vars.id),
+  })
+}
+
 const rollupRuleBundle = {
   useList: useRollupRuleList,
   useOwnRules: useOwnRollupRules,
   useCreate: useRollupRuleCreate,
   useRemove: useRollupRuleRemove,
   useRestore: useRollupRuleRestore,
+  useRecompute: useRollupRuleRecompute,
 }
 
 export function useRollupRules() {

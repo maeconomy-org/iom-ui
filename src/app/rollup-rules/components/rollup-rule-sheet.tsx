@@ -52,6 +52,8 @@ interface RollupRuleSheetProps {
   mode: RollupRuleSheetMode
   /** The subject for `view`. */
   rule?: RollupRuleDTO | null
+  /** Queue a recompute of the viewed rule. Omitted where the viewer may not run one. */
+  onRecompute?: (rule: RollupRuleDTO) => void
 }
 
 export function RollupRuleSheet({
@@ -59,6 +61,7 @@ export function RollupRuleSheet({
   onOpenChange,
   mode,
   rule = null,
+  onRecompute,
 }: RollupRuleSheetProps) {
   const t = useTranslations()
 
@@ -82,7 +85,11 @@ export function RollupRuleSheet({
             effect — the same guard the constant sheet needs. */}
         {open &&
           (mode === 'view' && rule ? (
-            <RollupRuleView rule={rule} onDone={() => onOpenChange(false)} />
+            <RollupRuleView
+              rule={rule}
+              onDone={() => onOpenChange(false)}
+              onRecompute={onRecompute}
+            />
           ) : (
             <RollupRuleForm onDone={() => onOpenChange(false)} />
           ))}
@@ -378,9 +385,11 @@ function RollupRuleForm({ onDone }: { onDone: () => void }) {
 function RollupRuleView({
   rule,
   onDone,
+  onRecompute,
 }: {
   rule: RollupRuleDTO
   onDone: () => void
+  onRecompute?: (rule: RollupRuleDTO) => void
 }) {
   const t = useTranslations()
   const locale = useLocale() as PropertyDictionaryLocale
@@ -401,6 +410,20 @@ function RollupRuleView({
         <Fact label={t('rollupRules.aggregation')}>
           {t(`rollupRules.aggregations.${rule.aggregation}`)}
         </Fact>
+        {rule.multiplyBy && (
+          <Fact label={t('rollupRules.multiplyBy')}>
+            <span className="font-medium">
+              {resolvePropertyLabel(
+                rule.multiplyBy.propertyKey,
+                undefined,
+                locale
+              )}
+            </span>
+            <span className="ml-1.5 font-mono text-xs text-muted-foreground">
+              {rule.multiplyBy.propertyKey}
+            </span>
+          </Fact>
+        )}
         <Fact label={t('common.owner')}>
           <OwnerCell
             system={rule.system}
@@ -419,15 +442,27 @@ function RollupRuleView({
         </p>
       </SheetBody>
 
-      <SheetFooter className="border-t px-6 py-3">
+      <SheetFooter className="flex-row gap-2 border-t px-6 py-3">
         <Button
           type="button"
           variant="outline"
-          className="w-full"
+          className="flex-1"
           onClick={onDone}
         >
           {t('common.close')}
         </Button>
+        {/* A system rule fans out across every object on the node, and a deleted one computes
+            nothing — the node refuses both, so neither is offered. */}
+        {onRecompute && !rule.system && !rule.deleted && (
+          <Button
+            type="button"
+            className="flex-1"
+            data-testid="rollup-rule-recompute"
+            onClick={() => onRecompute(rule)}
+          >
+            {t('rollupRules.recompute')}
+          </Button>
+        )}
       </SheetFooter>
     </div>
   )

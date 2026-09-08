@@ -4,6 +4,7 @@ import { useState, useCallback, useMemo } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
 import { PlusCircle, Sigma } from 'lucide-react'
 import dynamic from 'next/dynamic'
+import { toast } from 'sonner'
 
 import { Button } from '@/components/ui'
 import {
@@ -21,6 +22,7 @@ import {
   useEntityListQuery,
 } from '@/components/entity-list'
 import { DeleteConfirmationDialog } from '@/components/dialogs'
+import { rollupRuleErrorMessage } from './lib/errors'
 import { useAuth } from '@/contexts'
 import { PageHelp } from '@/components/onboarding/page-help'
 import {
@@ -64,9 +66,10 @@ export default function RollupRulesPage() {
   useTourAction(TOUR_ACTIONS.closeSheet, () => setSheet(null))
 
   const listQuery = useEntityListQuery()
-  const { useList, useRemove, useRestore } = useRollupRules()
+  const { useList, useRemove, useRestore, useRecompute } = useRollupRules()
   const removeMutation = useRemove()
   const restoreMutation = useRestore()
+  const recomputeMutation = useRecompute()
 
   const setPage = listQuery.setPage
   const filters = useEntityListFilters(useCallback(() => setPage(1), [setPage]))
@@ -93,13 +96,31 @@ export default function RollupRulesPage() {
     canAct: (rule) => canWriteLibraryItem(rule, userId),
   })
 
+  /**
+   * 202 means QUEUED, so the toast says queued. Promising the totals are ready would be a lie the
+   * user can check: the fan-out runs at bulk priority and each target still waits out its cooldown.
+   */
+  const handleRecompute = useCallback(
+    async (rule: RollupRuleDTO) => {
+      try {
+        await recomputeMutation.mutateAsync({ id: rule.id })
+        toast.success(t('rollupRules.recomputeQueued'))
+      } catch (error) {
+        const { key, values } = rollupRuleErrorMessage(error)
+        toast.error(t(key, values))
+      }
+    },
+    [recomputeMutation, t]
+  )
+
   const actions: RollupRuleColumnActions = useMemo(
     () => ({
       onViewDetails: (rule) => setSheet({ mode: 'view', rule }),
       onDelete: list.setToDelete,
       onRestore: list.handleRestore,
+      onRecompute: handleRecompute,
     }),
-    [list.setToDelete, list.handleRestore]
+    [list.setToDelete, list.handleRestore, handleRecompute]
   )
 
   const columns = useMemo(
@@ -169,6 +190,10 @@ export default function RollupRulesPage() {
           onOpenChange={(open) => !open && setSheet(null)}
           mode={sheet.mode}
           rule={sheet.mode === 'view' ? sheet.rule : null}
+          onRecompute={(rule) => {
+            setSheet(null)
+            void handleRecompute(rule)
+          }}
         />
       )}
 
